@@ -52,6 +52,10 @@ html,body{height:100%;background:#f0ede6;}
 .login-btn:hover{background:#ff7040;}
 .login-err{color:#ff6b6b;font-size:11px;margin-top:10px;text-align:center;letter-spacing:1px;}
 .login-ok{color:#4ade80;font-size:11px;margin-top:10px;text-align:center;letter-spacing:1px;}
+.login-link{background:none;border:none;color:#e85d26;cursor:pointer;font-size:11px;text-decoration:underline;margin-top:8px;padding:0;letter-spacing:0.5px;font-family:inherit;}
+.login-link:hover{color:#ff7a47;}
+.b-del{background:none;border:none;cursor:pointer;font-size:14px;padding:4px;opacity:0.6;transition:opacity .2s;}
+.b-del:hover{opacity:1;}
 
 /* HEADER */
 .hdr{background:#1a1a1a;padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:52px;position:sticky;top:0;z-index:100;}
@@ -266,12 +270,10 @@ export default function App() {
   const [cihazForm, setCihazForm] = useState({ ad: CIHAZ_TURLERI[0], seri: "" });
   const [bakimForm, setBakimForm] = useState({ tarih: new Date().toISOString().split("T")[0], notlar: "" });
 
-  // Şifre state (kullanılmıyor - Firebase Auth kullanılıyor)
   const [sifreForm, setSifreForm] = useState({});
   const [sifreErr, setSifreErr]   = useState("");
   const [sifreOk, setSifreOk]     = useState("");
 
-  // Yedek parça tabloları (5 adet, her biri satır listesi + sütun başlıkları)
   const DEFAULT_SUTUNLAR = ["Parça Adı", "Miktar", "Açıklama"];
   const [yedekTablolar, setYedekTablolar] = useState(
     Array.from({length:5}, (_,i) => ({
@@ -288,18 +290,19 @@ export default function App() {
   const [statFiltre, setStatFiltre] = useState("");
   const LINES = Array.from({length:8}, (_,i) => `${i+1} LINE`);
 
-  // Veri yükleme - Firebase Realtime Database
   const yukleVeri = useCallback(async () => {
     try {
       const snap = await get(ref(db, "bakimApp"));
       if (snap.exists()) {
         const d = snap.val();
-        if (d.kurumlar) setKurumlar(d.kurumlar);
-        if (d.cihazlar) setCihazlar(d.cihazlar);
-        if (d.bakimlar) setBakimlar(d.bakimlar);
-        if (d.yedekTablolar) setYedekTablolar(d.yedekTablolar.map((t,i) => ({
-          isim: `Not ${i+1}`, ...t
-        })));
+        const toArr = v => Array.isArray(v) ? v : Object.values(v || {});
+        if (d.kurumlar) setKurumlar(toArr(d.kurumlar));
+        if (d.cihazlar) setCihazlar(toArr(d.cihazlar));
+        if (d.bakimlar) setBakimlar(toArr(d.bakimlar));
+        if (d.yedekTablolar) {
+          const arr = toArr(d.yedekTablolar);
+          setYedekTablolar(arr.map((t,i) => normalizeTablo(t, i)));
+        }
       }
     } catch(e) { console.error("Veri yükleme hatası:", e); }
     setYuklendi(true);
@@ -313,23 +316,36 @@ export default function App() {
     setTimeout(() => setSyncing(false), 600);
   }, []);
 
-  // Firebase realtime listener
   useEffect(() => {
     const unsubscribe = onValue(ref(db, "bakimApp"), (snap) => {
       if (snap.exists() && yuklendi) {
         const d = snap.val();
-        if (d.kurumlar) setKurumlar(d.kurumlar);
-        if (d.cihazlar) setCihazlar(d.cihazlar);
-        if (d.bakimlar) setBakimlar(d.bakimlar);
-        if (d.yedekTablolar) setYedekTablolar(prev =>
-          d.yedekTablolar.map((t,i) => ({ isim: prev[i]?.isim || `Not ${i+1}`, ...t }))
-        );
+        const toArr = v => Array.isArray(v) ? v : Object.values(v || {});
+        if (d.kurumlar) setKurumlar(toArr(d.kurumlar));
+        if (d.cihazlar) setCihazlar(toArr(d.cihazlar));
+        if (d.bakimlar) setBakimlar(toArr(d.bakimlar));
+        if (d.yedekTablolar) {
+          const arr = toArr(d.yedekTablolar);
+          setYedekTablolar(prev => arr.map((t,i) => ({ ...normalizeTablo(t,i), isim: prev[i]?.isim || `Not ${i+1}` })));
+        }
       }
     });
     return () => unsubscribe();
   }, [yuklendi]);
 
   useEffect(() => { yukleVeri(); }, []);
+
+  function normalizeTablo(t, i) {
+    return {
+      isim: `Not ${i+1}`,
+      ...t,
+      id: t.id ?? i+1,
+      sutunlar: Array.isArray(t.sutunlar) ? t.sutunlar : Object.values(t.sutunlar || {}),
+      satirlar: Array.isArray(t.satirlar)
+        ? t.satirlar.map(s => ({ ...s, hücreler: Array.isArray(s.hücreler) ? s.hücreler : Object.values(s.hücreler || {}) }))
+        : Object.values(t.satirlar || {}).map(s => ({ ...s, hücreler: Array.isArray(s.hücreler) ? s.hücreler : Object.values(s.hücreler || {}) }))
+    };
+  }
 
   async function login() {
     setLoginErr("");
@@ -451,6 +467,12 @@ export default function App() {
     setModal(null);
   }
 
+  async function bakimSil(bakimId) {
+    const yeni = bakimlar.filter(b => b.id !== bakimId);
+    setBakimlar(yeni);
+    await kaydetVeri(kurumlar, cihazlar, yeni, yedekTablolar);
+  }
+
   async function yedekTablo_satirEkle(tabloId) {
     const yeni = yedekTablolar.map(t => t.id === tabloId
       ? { ...t, satirlar: [...t.satirlar, { id: Date.now(), hücreler: Array(t.sutunlar.length).fill("") }] }
@@ -522,13 +544,10 @@ export default function App() {
     await kaydetVeri(kurumlar, cihazlar, bakimlar, yeni);
   }
 
-
-
   const kurumCihazlari = useMemo(() => {
     if (!seciliKurumId) return [];
     return cihazlar.filter(c => {
       if (c.kurumId !== seciliKurumId) return false;
-      // Kurum 1 ise line filtresi uygula
       if (seciliKurumId === 1 && seciliLine) {
         if (c.line !== seciliLine) return false;
       }
@@ -543,12 +562,11 @@ export default function App() {
       .sort((a,b) => {
         const tarihFark = new Date(b.tarih) - new Date(a.tarih);
         if (tarihFark !== 0) return tarihFark;
-        return b.id - a.id; // aynı tarihse eklenme sırasına göre (yeni üstte)
+        return b.id - a.id;
       }) : [],
     [bakimlar, seciliCihazId]
   );
 
-  // LOGIN
   if (!aktifKullanici) return (
     <div className="app">
       <style>{CSS}</style>
@@ -574,6 +592,9 @@ export default function App() {
               Beni hatırla
             </label>
           </div>
+          <button className="login-link" onClick={() => { setSifreSifirlamaMsg(""); setSifreSifirlamaErr(""); setModal("sifremiUnuttum"); }}>
+            Şifremi Unuttum?
+          </button>
           {loginErr && <div className="login-err">{loginErr}</div>}
         </div>
       </div>
@@ -590,10 +611,8 @@ export default function App() {
     <div className="app">
       <style>{CSS}</style>
 
-      {/* HEADER */}
       <div className="hdr">
         <div className="logo" onClick={goGenel}>BAKIM<span>.</span>TAKİP</div>
-
         <div className="hdr-right">
           <span style={{fontSize:10,color:"#555",letterSpacing:1}}>
             <span className={`sync-dot ${syncing?"syncing":""}`}/>
@@ -606,7 +625,6 @@ export default function App() {
       </div>
 
       <div className="layout">
-        {/* SIDEBAR */}
         <div className="sidebar">
           <div className="sb-home" onClick={goGenel}>
             <span style={{fontSize:16}}>🏠</span>
@@ -640,8 +658,6 @@ export default function App() {
         </div>
 
         <div className="main">
-
-          {/* Her sayfada ANA SAYFA butonu */}
           {ekran !== "kurumlar" && (
             <div className="page-hdr">
               <button className="home-btn" onClick={goGenel}>🏠 ANA SAYFA</button>
@@ -663,7 +679,6 @@ export default function App() {
             </div>
           )}
 
-          {/* GENEL BAKIŞ */}
           {ekran === "kurumlar" && (
             <>
               <div className="stats">
@@ -688,7 +703,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Stat filtresi aktifse cihaz listesi göster */}
               {statFiltre && (() => {
                 const filtrelenmis = cihazlar.filter(c => {
                   const g = gunFarki(sonBakimlar[c.id]?.tarih);
@@ -748,7 +762,6 @@ export default function App() {
                 </select>
               </div>
 
-              {/* TEKNİK BİLGİ */}
               <div style={{marginTop:20}}>
                 <div style={{fontSize:9,letterSpacing:2,textTransform:"uppercase",color:"#999",marginBottom:8}}>Teknik Bilgi</div>
                 <select className="kurum-select-main" value={seciliYedekNo}
@@ -765,7 +778,6 @@ export default function App() {
             </>
           )}
 
-          {/* KURUM DETAY */}
           {ekran === "kurumDetay" && seciliKurum && (
             <>
               <div className="kd-hdr">
@@ -788,7 +800,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* KURUM 1 İÇİN LINE DROPDOWN */}
               {seciliKurumId === 1 && (
                 <div style={{marginBottom:20}}>
                   <div style={{fontSize:9,letterSpacing:2,textTransform:"uppercase",color:"#999",marginBottom:8}}>Line Seçin</div>
@@ -803,7 +814,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* Kurum 1 ise ve line seçilmemişse içerik gösterme */}
               {seciliKurumId === 1 && !seciliLine ? (
                 <div className="empty">
                   <div className="ico">🏭</div>
@@ -846,7 +856,6 @@ export default function App() {
             </>
           )}
 
-          {/* CİHAZ DETAY */}
           {ekran === "cihazDetay" && seciliCihaz && (
             <>
               <div className="dh">
@@ -865,6 +874,7 @@ export default function App() {
                 <div className="bl">
                   {cihazBakimlari.map(b => {
                     const d = new Date(b.tarih);
+                    const canDelete = b.ekleyen === aktifKullanici.ad;
                     return (
                       <div key={b.id} className="bi">
                         <div className="b-box">
@@ -876,7 +886,12 @@ export default function App() {
                           {b.notlar && <div className="b-note">{b.notlar}</div>}
                           <div className="b-editor">Ekleyen: {b.ekleyen}</div>
                         </div>
-                        <Durum tarih={b.tarih} sm />
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <Durum tarih={b.tarih} sm />
+                          {canDelete && (
+                            <button className="b-del" onClick={e => {e.stopPropagation(); bakimSil(b.id);}} title="Bakımı sil">🗑</button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -887,7 +902,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* TEKNİK BİLGİ SAYFASI - TAM EKRAN OVERLAY */}
       {teknikBilgiEkran && seciliYedekNo !== "" && (() => {
         const tablo = yedekTablolar.find(t => String(t.id) === String(seciliYedekNo));
         if (!tablo) return (
@@ -901,7 +915,6 @@ export default function App() {
         return (
           <div className="tb-overlay">
             <div className="tb-page">
-              {/* Sayfa Başlığı */}
               <div className="tb-hdr">
                 <div className="tb-hdr-left">
                   <button className="home-btn" onClick={() => { setTeknikBilgiEkran(false); setSeciliYedekNo(""); }}>
@@ -943,7 +956,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Excel Tablo */}
               <div className="excel-wrap" style={{marginTop:16}}>
                 <table className="excel-tbl">
                   <thead>
@@ -995,7 +1007,6 @@ export default function App() {
         );
       })()}
 
-      {/* MODAL: KURUM EKLE */}
       {modal === "kurumEkle" && (
         <div className="ov" onClick={() => setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -1014,7 +1025,6 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL: KURUM SİL */}
       {modal === "kurumSil" && isimModal && (
         <div className="ov" onClick={() => setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -1031,7 +1041,6 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL: KURUM İSMİ */}
       {modal === "isim" && isimModal && (
         <div className="ov" onClick={() => setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -1052,7 +1061,6 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL: CİHAZ EKLE */}
       {modal === "cihazEkle" && (
         <div className="ov" onClick={() => setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -1079,7 +1087,6 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL: BAKIM EKLE */}
       {modal === "bakimEkle" && seciliCihaz && (
         <div className="ov" onClick={() => setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -1109,7 +1116,44 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL: ŞİFRE DEĞİŞTİR */}
+      {modal === "sifremiUnuttum" && (
+        <div className="ov" onClick={() => setModal(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="m-title">ŞİFREMİ UNUTTUM</div>
+            <div style={{fontSize:12,color:"#888",marginBottom:20,lineHeight:1.6}}>
+              Mail adresinizi girin. Şifre sıfırlama linki mail'e gönderilecek.
+            </div>
+            <div className="fg">
+              <label>Mail Adresi</label>
+              <input className="fi" autoFocus placeholder="ornek@nukleus.com.tr"
+                defaultValue={loginForm.mail}
+                id="unutmaMailInput"
+                onKeyDown={e => e.key==="Enter" && (() => {
+                  const mail = document.getElementById("unutmaMailInput").value.trim();
+                  if (mail) {
+                    sendPasswordResetEmail(auth, mail)
+                      .then(() => setSifreSifirlamaMsg("Mail gönderildi! İnbox'ınızı kontrol edin."))
+                      .catch(() => setSifreSifirlamaErr("Bu mail sisteme tanımlı değil."));
+                  }
+                })()} />
+            </div>
+            {sifreSifirlamaMsg && <div className="m-ok" style={{marginBottom:12}}>✓ {sifreSifirlamaMsg}</div>}
+            {sifreSifirlamaErr && <div className="m-err" style={{marginBottom:12}}>⚠ {sifreSifirlamaErr}</div>}
+            <div className="m-acts">
+              <button className="btn-s" onClick={() => setModal(null)}>İptal</button>
+              <button className="btn btn-sm" onClick={() => {
+                const mail = document.getElementById("unutmaMailInput").value.trim();
+                if (mail) {
+                  sendPasswordResetEmail(auth, mail)
+                    .then(() => setSifreSifirlamaMsg("Mail gönderildi! İnbox'ınızı kontrol edin."))
+                    .catch(() => setSifreSifirlamaErr("Bu mail sisteme tanımlı değil."));
+                }
+              }}>MAİL GÖNDER</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {modal === "sifre" && (
         <div className="ov" onClick={() => setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
