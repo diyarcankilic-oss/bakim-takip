@@ -285,7 +285,7 @@ export default function App() {
   const [teknikBilgiEkran, setTeknikBilgiEkran] = useState(false);
   const [notIsmiDuzenle, setNotIsmiDuzenle] = useState(null);
   const [seciliLine, setSeciliLine] = useState("");
-
+  const [statFiltre, setStatFiltre] = useState("");
   const LINES = Array.from({length:8}, (_,i) => `${i+1} LINE`);
 
   // Veri yükleme - Firebase Realtime Database
@@ -667,12 +667,73 @@ export default function App() {
           {ekran === "kurumlar" && (
             <>
               <div className="stats">
-                <div className="sc t"><div className="sc-l">Toplam Cihaz</div><div className="sc-v">{genelIst.toplam}</div></div>
-                <div className="sc ok"><div className="sc-l">Güncel ≤30g</div><div className="sc-v">{genelIst.ok}</div></div>
-                <div className="sc wn"><div className="sc-l">Uyarı 31-90g</div><div className="sc-v">{genelIst.warn}</div></div>
-                <div className="sc cr"><div className="sc-l">Kritik/Bakımsız</div><div className="sc-v">{genelIst.kritik}</div></div>
+                <div className="sc t" style={{cursor:"default"}}>
+                  <div className="sc-l">Toplam Cihaz</div>
+                  <div className="sc-v">{genelIst.toplam}</div>
+                </div>
+                <div className="sc ok" style={{cursor:"pointer",outline: statFiltre==="ok"?"2px solid #4ade80":"none"}}
+                  onClick={() => setStatFiltre(statFiltre==="ok" ? "" : "ok")}>
+                  <div className="sc-l">Güncel ≤30g {statFiltre==="ok" && "✓"}</div>
+                  <div className="sc-v">{genelIst.ok}</div>
+                </div>
+                <div className="sc wn" style={{cursor:"pointer",outline: statFiltre==="warn"?"2px solid #fbbf24":"none"}}
+                  onClick={() => setStatFiltre(statFiltre==="warn" ? "" : "warn")}>
+                  <div className="sc-l">Uyarı 31-90g {statFiltre==="warn" && "✓"}</div>
+                  <div className="sc-v">{genelIst.warn}</div>
+                </div>
+                <div className="sc cr" style={{cursor:"pointer",outline: statFiltre==="kritik"?"2px solid #f87171":"none"}}
+                  onClick={() => setStatFiltre(statFiltre==="kritik" ? "" : "kritik")}>
+                  <div className="sc-l">Kritik/Bakımsız {statFiltre==="kritik" && "✓"}</div>
+                  <div className="sc-v">{genelIst.kritik}</div>
+                </div>
               </div>
-              <div style={{marginTop:8}}>
+
+              {/* Stat filtresi aktifse cihaz listesi göster */}
+              {statFiltre && (() => {
+                const filtrelenmis = cihazlar.filter(c => {
+                  const g = gunFarki(sonBakimlar[c.id]?.tarih);
+                  if (statFiltre === "ok")    return g !== null && g <= 30;
+                  if (statFiltre === "warn")  return g !== null && g > 30 && g <= 90;
+                  if (statFiltre === "kritik") return g === null || g > 90;
+                  return false;
+                });
+                const baslik = statFiltre==="ok" ? "Güncel Cihazlar" : statFiltre==="warn" ? "Uyarı Cihazlar" : "Kritik / Bakımsız Cihazlar";
+                return (
+                  <div style={{marginBottom:20}}>
+                    <div style={{fontSize:10,letterSpacing:2,textTransform:"uppercase",color:"#999",margin:"16px 0 10px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <span>{baslik} ({filtrelenmis.length})</span>
+                      <button onClick={() => setStatFiltre("")} style={{background:"none",border:"none",color:"#bbb",cursor:"pointer",fontSize:18,lineHeight:1}}>×</button>
+                    </div>
+                    {filtrelenmis.length === 0 ? (
+                      <div className="empty" style={{padding:"24px"}}><p>Cihaz bulunamadı.</p></div>
+                    ) : (
+                      <div className="tw">
+                        <table>
+                          <thead>
+                            <tr><th>Cihaz</th><th>Kurum</th><th>Son Bakım</th><th>Durum</th></tr>
+                          </thead>
+                          <tbody>
+                            {filtrelenmis.map(c => {
+                              const sb = sonBakimlar[c.id];
+                              const kurum = kurumlar.find(k=>k.id===c.kurumId);
+                              return (
+                                <tr key={c.id} style={{cursor:"pointer"}} onClick={() => { goKurum(c.kurumId); setTimeout(()=>goCihaz(c.id),50); }}>
+                                  <td style={{fontWeight:600}}>{c.ad}</td>
+                                  <td><span className="ktag">{kurum?.ad}</span></td>
+                                  <td style={{fontSize:11}}>{fmt(sb?.tarih)}</td>
+                                  <td><Durum tarih={sb?.tarih} sm /></td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              <div style={{marginTop: statFiltre ? 4 : 8}}>
                 <div style={{fontSize:9,letterSpacing:2,textTransform:"uppercase",color:"#999",marginBottom:8}}>Kurum Seçin</div>
                 <select className="kurum-select-main"
                   value={seciliKurumId ?? ""}
@@ -693,11 +754,11 @@ export default function App() {
                 <select className="kurum-select-main" value={seciliYedekNo}
                   onChange={e => {
                     setSeciliYedekNo(e.target.value);
-                    if (e.target.value !== "") setTeknikBilgiEkran(true);
+                    if (e.target.value !== "") { setTeknikBilgiEkran(true); setEkran("kurumlar"); }
                   }}>
                   <option value="">— Not Seçiniz —</option>
                   {yedekTablolar.map(t => (
-                    <option key={t.id} value={t.id}>{t.isim}</option>
+                    <option key={t.id} value={String(t.id)}>{t.isim}</option>
                   ))}
                 </select>
               </div>
@@ -828,8 +889,15 @@ export default function App() {
 
       {/* TEKNİK BİLGİ SAYFASI - TAM EKRAN OVERLAY */}
       {teknikBilgiEkran && seciliYedekNo !== "" && (() => {
-        const tablo = yedekTablolar.find(t => t.id === Number(seciliYedekNo));
-        if (!tablo) return null;
+        const tablo = yedekTablolar.find(t => String(t.id) === String(seciliYedekNo));
+        if (!tablo) return (
+          <div className="tb-overlay">
+            <div className="tb-page">
+              <button className="home-btn" onClick={() => { setTeknikBilgiEkran(false); setSeciliYedekNo(""); }}>← GERİ</button>
+              <div style={{marginTop:40,textAlign:"center",color:"#999",fontSize:13}}>Tablo yükleniyor...</div>
+            </div>
+          </div>
+        );
         return (
           <div className="tb-overlay">
             <div className="tb-page">
