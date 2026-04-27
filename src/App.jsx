@@ -715,27 +715,6 @@ export default function App() {
                   </div>
                   <div className="kd-acts">
                     <button className="btn-s btn-s-sm" onClick={() => { setIsimModal(seciliKurum); setYeniIsim(seciliKurum.ad); setModal("isim"); }}>✎ İsim Değiştir</button>
-                    <button className="btn btn-sm" onClick={() => setModal("cihazEkle")}>+ CİHAZ EKLE</button>
-                  </div>
-                </div>
-              </div>
-          {/* KURUM DETAY */}
-          {ekran === "kurumDetay" && seciliKurum && (
-            <>
-              <div className="kd-hdr">
-                <div className="kd-ust">
-                  <div>
-                    <div className="kd-title">{seciliKurum.ad}</div>
-                    <div className="kd-meta">
-                      {ist(seciliKurum.id).toplam} cihaz
-                      {ist(seciliKurum.id).ok > 0 && <span style={{color:"#16a34a"}}> · {ist(seciliKurum.id).ok} güncel</span>}
-                      {ist(seciliKurum.id).warn > 0 && <span style={{color:"#a16207"}}> · {ist(seciliKurum.id).warn} uyarı</span>}
-                      {ist(seciliKurum.id).kritik > 0 && <span style={{color:"#dc2626"}}> · {ist(seciliKurum.id).kritik} kritik</span>}
-                    </div>
-                  </div>
-                  <div className="kd-acts">
-                    <button className="btn-s btn-s-sm" onClick={() => { setIsimModal(seciliKurum); setYeniIsim(seciliKurum.ad); setModal("isim"); }}>✎ İsim Değiştir</button>
-                    {/* Kurum 1: sadece line seçiliyse cihaz ekle butonu göster */}
                     {(seciliKurumId !== 1 || seciliLine) &&
                       <button className="btn btn-sm" onClick={() => setModal("cihazEkle")}>+ CİHAZ EKLE</button>
                     }
