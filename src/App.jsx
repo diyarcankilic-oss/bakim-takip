@@ -539,7 +539,12 @@ export default function App() {
   }, [cihazlar, seciliKurumId, arama, seciliLine]);
 
   const cihazBakimlari = useMemo(() =>
-    seciliCihazId ? bakimlar.filter(b => b.cihazId === seciliCihazId).sort((a,b) => new Date(b.tarih)-new Date(a.tarih)) : [],
+    seciliCihazId ? bakimlar.filter(b => b.cihazId === seciliCihazId)
+      .sort((a,b) => {
+        const tarihFark = new Date(b.tarih) - new Date(a.tarih);
+        if (tarihFark !== 0) return tarihFark;
+        return b.id - a.id; // aynı tarihse eklenme sırasına göre (yeni üstte)
+      }) : [],
     [bakimlar, seciliCihazId]
   );
 
