@@ -351,6 +351,8 @@ export default function App() {
         : Object.values(t.satirlar || {}).map(s => ({ ...s, hücreler: Array.isArray(s.hücreler) ? s.hücreler : Object.values(s.hücreler || {}) }))
     };
   }
+
+  async function login() {
     setLoginErr("");
     try {
       const uc = await signInWithEmailAndPassword(auth, loginForm.mail.trim(), loginForm.sifre);
