@@ -609,6 +609,45 @@ export default function App() {
           {loginErr && <div className="login-err">{loginErr}</div>}
         </div>
       </div>
+
+      {/* MODAL: ŞİFRESİNİ UNUTTUM (LOGIN PAGE) */}
+      {modal === "sifremiUnuttum" && (
+        <div className="ov" onClick={() => setModal(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="m-title">ŞİFREMİ UNUTTUM</div>
+            <div style={{fontSize:12,color:"#888",marginBottom:20,lineHeight:1.6}}>
+              Mail adresinizi girin. Şifre sıfırlama linki mail'e gönderilecek.
+            </div>
+            <div className="fg">
+              <label>Mail Adresi</label>
+              <input className="fi" autoFocus placeholder="ornek@nukleus.com.tr"
+                value={loginForm.mail}
+                onChange={e => setLoginForm({...loginForm, mail: e.target.value})}
+                onKeyDown={e => {
+                  if (e.key === "Enter" && loginForm.mail.trim()) {
+                    sendPasswordResetEmail(auth, loginForm.mail.trim())
+                      .then(() => setSifreSifirlamaMsg("Mail gönderildi! İnbox'ınızı kontrol edin."))
+                      .catch(() => setSifreSifirlamaErr("Bu mail sisteme tanımlı değil."));
+                  }
+                }} />
+            </div>
+            {sifreSifirlamaMsg && <div className="m-ok" style={{marginBottom:12}}>✓ {sifreSifirlamaMsg}</div>}
+            {sifreSifirlamaErr && <div className="m-err" style={{marginBottom:12}}>⚠ {sifreSifirlamaErr}</div>}
+            <div className="m-acts">
+              <button className="btn-s" onClick={() => { setModal(null); setSifreSifirlamaMsg(""); setSifreSifirlamaErr(""); }}>İptal</button>
+              <button className="btn btn-sm" onClick={() => {
+                if (loginForm.mail.trim()) {
+                  sendPasswordResetEmail(auth, loginForm.mail.trim())
+                    .then(() => setSifreSifirlamaMsg("Mail gönderildi! İnbox'ınızı kontrol edin."))
+                    .catch(() => setSifreSifirlamaErr("Bu mail sisteme tanımlı değil."));
+                } else {
+                  setSifreSifirlamaErr("Lütfen mail adresi girin.");
+                }
+              }}>MAİL GÖNDER</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -710,7 +749,7 @@ export default function App() {
                 </div>
                 <div className="sc wn" style={{cursor:"pointer",outline: statFiltre==="warn"?"2px solid #fbbf24":"none"}}
                   onClick={() => setStatFiltre(statFiltre==="warn" ? "" : "warn")}>
-                  <div className="sc-l">Uyarı 31-90g {statFiltre==="warn" && "✓"}</div>
+                  <div className="sc-l">Uyarı 60-90g {statFiltre==="warn" && "✓"}</div>
                   <div className="sc-v">{genelIst.warn}</div>
                 </div>
                 <div className="sc cr" style={{cursor:"pointer",outline: statFiltre==="kritik"?"2px solid #f87171":"none"}}
@@ -729,7 +768,7 @@ export default function App() {
                   if (statFiltre === "kritik") return g === null || g > 90;
                   return false;
                 });
-                const baslik = statFiltre==="ok" ? "Güncel Cihazlar" : statFiltre==="warn" ? "Uyarı Cihazlar" : "Kritik / Bakımsız Cihazlar";
+                const baslik = statFiltre==="ok" ? "Güncel Cihazlar" : statFiltre==="warn" ? "Uyarı Cihazlar (60-90g)" : "Kritik / Bakımsız Cihazlar";
                 return (
                   <div style={{marginBottom:20}}>
                     <div style={{fontSize:10,letterSpacing:2,textTransform:"uppercase",color:"#999",margin:"16px 0 10px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
