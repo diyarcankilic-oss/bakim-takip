@@ -270,10 +270,12 @@ export default function App() {
   const [cihazForm, setCihazForm] = useState({ ad: CIHAZ_TURLERI[0], seri: "" });
   const [bakimForm, setBakimForm] = useState({ tarih: new Date().toISOString().split("T")[0], notlar: "" });
 
+  // Şifre state (kullanılmıyor - Firebase Auth kullanılıyor)
   const [sifreForm, setSifreForm] = useState({});
   const [sifreErr, setSifreErr]   = useState("");
   const [sifreOk, setSifreOk]     = useState("");
 
+  // Yedek parça tabloları (5 adet, her biri satır listesi + sütun başlıkları)
   const DEFAULT_SUTUNLAR = ["Parça Adı", "Miktar", "Açıklama"];
   const [yedekTablolar, setYedekTablolar] = useState(
     Array.from({length:5}, (_,i) => ({
@@ -288,8 +290,10 @@ export default function App() {
   const [notIsmiDuzenle, setNotIsmiDuzenle] = useState(null);
   const [seciliLine, setSeciliLine] = useState("");
   const [statFiltre, setStatFiltre] = useState("");
+  const [bakimSilModal, setBakimSilModal] = useState(null);
   const LINES = Array.from({length:8}, (_,i) => `${i+1} LINE`);
 
+  // Veri yükleme - Firebase Realtime Database
   const yukleVeri = useCallback(async () => {
     try {
       const snap = await get(ref(db, "bakimApp"));
@@ -316,6 +320,7 @@ export default function App() {
     setTimeout(() => setSyncing(false), 600);
   }, []);
 
+  // Firebase realtime listener
   useEffect(() => {
     const unsubscribe = onValue(ref(db, "bakimApp"), (snap) => {
       if (snap.exists() && yuklendi) {
@@ -346,8 +351,6 @@ export default function App() {
         : Object.values(t.satirlar || {}).map(s => ({ ...s, hücreler: Array.isArray(s.hücreler) ? s.hücreler : Object.values(s.hücreler || {}) }))
     };
   }
-
-  async function login() {
     setLoginErr("");
     try {
       const uc = await signInWithEmailAndPassword(auth, loginForm.mail.trim(), loginForm.sifre);
@@ -467,10 +470,12 @@ export default function App() {
     setModal(null);
   }
 
-  async function bakimSil(bakimId) {
-    const yeni = bakimlar.filter(b => b.id !== bakimId);
+  async function bakimSilOnayla() {
+    if (!bakimSilModal) return;
+    const yeni = bakimlar.filter(b => b.id !== bakimSilModal.id);
     setBakimlar(yeni);
     await kaydetVeri(kurumlar, cihazlar, yeni, yedekTablolar);
+    setBakimSilModal(null);
   }
 
   async function yedekTablo_satirEkle(tabloId) {
@@ -544,10 +549,13 @@ export default function App() {
     await kaydetVeri(kurumlar, cihazlar, bakimlar, yeni);
   }
 
+
+
   const kurumCihazlari = useMemo(() => {
     if (!seciliKurumId) return [];
     return cihazlar.filter(c => {
       if (c.kurumId !== seciliKurumId) return false;
+      // Kurum 1 ise line filtresi uygula
       if (seciliKurumId === 1 && seciliLine) {
         if (c.line !== seciliLine) return false;
       }
@@ -562,11 +570,12 @@ export default function App() {
       .sort((a,b) => {
         const tarihFark = new Date(b.tarih) - new Date(a.tarih);
         if (tarihFark !== 0) return tarihFark;
-        return b.id - a.id;
+        return b.id - a.id; // aynı tarihse eklenme sırasına göre (yeni üstte)
       }) : [],
     [bakimlar, seciliCihazId]
   );
 
+  // LOGIN
   if (!aktifKullanici) return (
     <div className="app">
       <style>{CSS}</style>
@@ -611,8 +620,10 @@ export default function App() {
     <div className="app">
       <style>{CSS}</style>
 
+      {/* HEADER */}
       <div className="hdr">
         <div className="logo" onClick={goGenel}>BAKIM<span>.</span>TAKİP</div>
+
         <div className="hdr-right">
           <span style={{fontSize:10,color:"#555",letterSpacing:1}}>
             <span className={`sync-dot ${syncing?"syncing":""}`}/>
@@ -625,6 +636,7 @@ export default function App() {
       </div>
 
       <div className="layout">
+        {/* SIDEBAR */}
         <div className="sidebar">
           <div className="sb-home" onClick={goGenel}>
             <span style={{fontSize:16}}>🏠</span>
@@ -658,6 +670,8 @@ export default function App() {
         </div>
 
         <div className="main">
+
+          {/* Her sayfada ANA SAYFA butonu */}
           {ekran !== "kurumlar" && (
             <div className="page-hdr">
               <button className="home-btn" onClick={goGenel}>🏠 ANA SAYFA</button>
@@ -679,6 +693,7 @@ export default function App() {
             </div>
           )}
 
+          {/* GENEL BAKIŞ */}
           {ekran === "kurumlar" && (
             <>
               <div className="stats">
@@ -703,6 +718,7 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Stat filtresi aktifse cihaz listesi göster */}
               {statFiltre && (() => {
                 const filtrelenmis = cihazlar.filter(c => {
                   const g = gunFarki(sonBakimlar[c.id]?.tarih);
@@ -762,6 +778,7 @@ export default function App() {
                 </select>
               </div>
 
+              {/* TEKNİK BİLGİ */}
               <div style={{marginTop:20}}>
                 <div style={{fontSize:9,letterSpacing:2,textTransform:"uppercase",color:"#999",marginBottom:8}}>Teknik Bilgi</div>
                 <select className="kurum-select-main" value={seciliYedekNo}
@@ -778,6 +795,7 @@ export default function App() {
             </>
           )}
 
+          {/* KURUM DETAY */}
           {ekran === "kurumDetay" && seciliKurum && (
             <>
               <div className="kd-hdr">
@@ -800,6 +818,7 @@ export default function App() {
                 </div>
               </div>
 
+              {/* KURUM 1 İÇİN LINE DROPDOWN */}
               {seciliKurumId === 1 && (
                 <div style={{marginBottom:20}}>
                   <div style={{fontSize:9,letterSpacing:2,textTransform:"uppercase",color:"#999",marginBottom:8}}>Line Seçin</div>
@@ -814,6 +833,7 @@ export default function App() {
                 </div>
               )}
 
+              {/* Kurum 1 ise ve line seçilmemişse içerik gösterme */}
               {seciliKurumId === 1 && !seciliLine ? (
                 <div className="empty">
                   <div className="ico">🏭</div>
@@ -840,7 +860,7 @@ export default function App() {
                         return (
                           <div key={c.id} className="cc" onClick={() => goCihaz(c.id)}>
                             <div className="cc-ad">{c.ad}</div>
-                            {c.seri && <div style={{fontSize:10,color:"#bbb"}}>S/N: {c.seri}</div>}
+                            {c.seri && <div style={{fontSize:11,color:"#1a1a1a",fontWeight:600}}>S/N: <strong>{c.seri}</strong></div>}
                             <div className="cc-sb">Son Bakım</div>
                             <div className="cc-alt">
                               <div style={{fontSize:12,fontWeight:500}}>{fmt(sb?.tarih)}</div>
@@ -856,6 +876,7 @@ export default function App() {
             </>
           )}
 
+          {/* CİHAZ DETAY */}
           {ekran === "cihazDetay" && seciliCihaz && (
             <>
               <div className="dh">
@@ -863,7 +884,7 @@ export default function App() {
                   <div className="d-title">{seciliCihaz.ad}</div>
                   <div className="d-meta">
                     <span className="ktag">{kurumlar.find(k=>k.id===seciliCihaz.kurumId)?.ad}</span>
-                    {seciliCihaz.seri && <span style={{color:"#bbb"}}>S/N: {seciliCihaz.seri}</span>}
+                    {seciliCihaz.seri && <span style={{color:"#1a1a1a",fontWeight:600}}>S/N: <strong>{seciliCihaz.seri}</strong></span>}
                   </div>
                 </div>
                 <button className="btn btn-sm" onClick={() => { setBakimForm({ tarih: new Date().toISOString().split("T")[0], notlar: "" }); setModal("bakimEkle"); }}>+ BAKIM EKLE</button>
@@ -889,7 +910,7 @@ export default function App() {
                         <div style={{display:"flex",alignItems:"center",gap:8}}>
                           <Durum tarih={b.tarih} sm />
                           {canDelete && (
-                            <button className="b-del" onClick={e => {e.stopPropagation(); bakimSil(b.id);}} title="Bakımı sil">🗑</button>
+                            <button className="b-del" onClick={e => {e.stopPropagation(); setBakimSilModal(b);}} title="Bakımı sil">🗑</button>
                           )}
                         </div>
                       </div>
@@ -902,6 +923,7 @@ export default function App() {
         </div>
       </div>
 
+      {/* TEKNİK BİLGİ SAYFASI - TAM EKRAN OVERLAY */}
       {teknikBilgiEkran && seciliYedekNo !== "" && (() => {
         const tablo = yedekTablolar.find(t => String(t.id) === String(seciliYedekNo));
         if (!tablo) return (
@@ -915,6 +937,7 @@ export default function App() {
         return (
           <div className="tb-overlay">
             <div className="tb-page">
+              {/* Sayfa Başlığı */}
               <div className="tb-hdr">
                 <div className="tb-hdr-left">
                   <button className="home-btn" onClick={() => { setTeknikBilgiEkran(false); setSeciliYedekNo(""); }}>
@@ -956,6 +979,7 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Excel Tablo */}
               <div className="excel-wrap" style={{marginTop:16}}>
                 <table className="excel-tbl">
                   <thead>
@@ -1007,6 +1031,7 @@ export default function App() {
         );
       })()}
 
+      {/* MODAL: KURUM EKLE */}
       {modal === "kurumEkle" && (
         <div className="ov" onClick={() => setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -1025,6 +1050,7 @@ export default function App() {
         </div>
       )}
 
+      {/* MODAL: KURUM SİL */}
       {modal === "kurumSil" && isimModal && (
         <div className="ov" onClick={() => setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -1041,6 +1067,7 @@ export default function App() {
         </div>
       )}
 
+      {/* MODAL: KURUM İSMİ */}
       {modal === "isim" && isimModal && (
         <div className="ov" onClick={() => setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -1061,6 +1088,7 @@ export default function App() {
         </div>
       )}
 
+      {/* MODAL: CİHAZ EKLE */}
       {modal === "cihazEkle" && (
         <div className="ov" onClick={() => setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -1087,6 +1115,7 @@ export default function App() {
         </div>
       )}
 
+      {/* MODAL: BAKIM EKLE */}
       {modal === "bakimEkle" && seciliCihaz && (
         <div className="ov" onClick={() => setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -1116,6 +1145,7 @@ export default function App() {
         </div>
       )}
 
+      {/* MODAL: ŞİFRESİNİ UNUTTUM (LOGIN) */}
       {modal === "sifremiUnuttum" && (
         <div className="ov" onClick={() => setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -1126,27 +1156,27 @@ export default function App() {
             <div className="fg">
               <label>Mail Adresi</label>
               <input className="fi" autoFocus placeholder="ornek@nukleus.com.tr"
-                defaultValue={loginForm.mail}
-                id="unutmaMailInput"
-                onKeyDown={e => e.key==="Enter" && (() => {
-                  const mail = document.getElementById("unutmaMailInput").value.trim();
-                  if (mail) {
-                    sendPasswordResetEmail(auth, mail)
+                value={loginForm.mail}
+                onChange={e => setLoginForm({...loginForm, mail: e.target.value})}
+                onKeyDown={e => {
+                  if (e.key === "Enter" && loginForm.mail.trim()) {
+                    sendPasswordResetEmail(auth, loginForm.mail.trim())
                       .then(() => setSifreSifirlamaMsg("Mail gönderildi! İnbox'ınızı kontrol edin."))
                       .catch(() => setSifreSifirlamaErr("Bu mail sisteme tanımlı değil."));
                   }
-                })()} />
+                }} />
             </div>
             {sifreSifirlamaMsg && <div className="m-ok" style={{marginBottom:12}}>✓ {sifreSifirlamaMsg}</div>}
             {sifreSifirlamaErr && <div className="m-err" style={{marginBottom:12}}>⚠ {sifreSifirlamaErr}</div>}
             <div className="m-acts">
-              <button className="btn-s" onClick={() => setModal(null)}>İptal</button>
+              <button className="btn-s" onClick={() => { setModal(null); setSifreSifirlamaMsg(""); setSifreSifirlamaErr(""); }}>İptal</button>
               <button className="btn btn-sm" onClick={() => {
-                const mail = document.getElementById("unutmaMailInput").value.trim();
-                if (mail) {
-                  sendPasswordResetEmail(auth, mail)
+                if (loginForm.mail.trim()) {
+                  sendPasswordResetEmail(auth, loginForm.mail.trim())
                     .then(() => setSifreSifirlamaMsg("Mail gönderildi! İnbox'ınızı kontrol edin."))
                     .catch(() => setSifreSifirlamaErr("Bu mail sisteme tanımlı değil."));
+                } else {
+                  setSifreSifirlamaErr("Lütfen mail adresi girin.");
                 }
               }}>MAİL GÖNDER</button>
             </div>
@@ -1154,6 +1184,7 @@ export default function App() {
         </div>
       )}
 
+      {/* MODAL: ŞİFRE SIFIRLAMA */}
       {modal === "sifre" && (
         <div className="ov" onClick={() => setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -1166,6 +1197,26 @@ export default function App() {
             <div className="m-acts">
               <button className="btn-s" onClick={() => setModal(null)}>İptal</button>
               <button className="btn btn-sm" onClick={sifreSifirla}>MAİL GÖNDER</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: BAKIM SİL ONAY */}
+      {bakimSilModal && (
+        <div className="ov" onClick={() => setBakimSilModal(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="m-title">BAKIM KAYDINI SİL</div>
+            <div style={{fontSize:13,color:"#888",marginBottom:20,lineHeight:1.7}}>
+              <strong style={{color:"#1a1a1a"}}>
+                {new Date(bakimSilModal.tarih).toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric" })}
+              </strong> tarihindeki bakım kaydını silmek istediğinize emin misiniz?<br/>
+              <span style={{fontSize:11,color:"#666"}}>Teknisyen: {bakimSilModal.yapan}</span><br/>
+              {bakimSilModal.notlar && <span style={{fontSize:11,color:"#666"}}>Not: {bakimSilModal.notlar}</span>}
+            </div>
+            <div className="m-acts">
+              <button className="btn-s" onClick={() => setBakimSilModal(null)}>İptal</button>
+              <button className="btn btn-sm" style={{background:"#dc2626"}} onClick={bakimSilOnayla}>SİL</button>
             </div>
           </div>
         </div>
