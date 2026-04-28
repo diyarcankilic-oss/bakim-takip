@@ -860,7 +860,7 @@ export default function App() {
                         return (
                           <div key={c.id} className="cc" onClick={() => goCihaz(c.id)}>
                             <div className="cc-ad">{c.ad}</div>
-                            {c.seri && <div style={{fontSize:11,color:"#1a1a1a",fontWeight:600}}>S/N: <strong>{c.seri}</strong></div>}
+                            {c.seri && <div style={{fontSize:13,color:"#1a1a1a",fontWeight:700,letterSpacing:"0.5px"}}>S/N: {c.seri}</div>}
                             <div className="cc-sb">Son Bakım</div>
                             <div className="cc-alt">
                               <div style={{fontSize:12,fontWeight:500}}>{fmt(sb?.tarih)}</div>
@@ -884,7 +884,7 @@ export default function App() {
                   <div className="d-title">{seciliCihaz.ad}</div>
                   <div className="d-meta">
                     <span className="ktag">{kurumlar.find(k=>k.id===seciliCihaz.kurumId)?.ad}</span>
-                    {seciliCihaz.seri && <span style={{color:"#1a1a1a",fontWeight:600}}>S/N: <strong>{seciliCihaz.seri}</strong></span>}
+                    {seciliCihaz.seri && <span style={{color:"#1a1a1a",fontWeight:700,fontSize:14,letterSpacing:"0.5px"}}>S/N: {seciliCihaz.seri}</span>}
                   </div>
                 </div>
                 <button className="btn btn-sm" onClick={() => { setBakimForm({ tarih: new Date().toISOString().split("T")[0], notlar: "" }); setModal("bakimEkle"); }}>+ BAKIM EKLE</button>
@@ -1206,17 +1206,23 @@ export default function App() {
       {bakimSilModal && (
         <div className="ov" onClick={() => setBakimSilModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="m-title">BAKIM KAYDINI SİL</div>
-            <div style={{fontSize:13,color:"#888",marginBottom:20,lineHeight:1.7}}>
-              <strong style={{color:"#1a1a1a"}}>
-                {new Date(bakimSilModal.tarih).toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric" })}
-              </strong> tarihindeki bakım kaydını silmek istediğinize emin misiniz?<br/>
-              <span style={{fontSize:11,color:"#666"}}>Teknisyen: {bakimSilModal.yapan}</span><br/>
-              {bakimSilModal.notlar && <span style={{fontSize:11,color:"#666"}}>Not: {bakimSilModal.notlar}</span>}
+            <div style={{textAlign:"center",marginBottom:16}}>
+              <div style={{fontSize:32,marginBottom:8}}>⚠️</div>
+              <div className="m-title" style={{color:"#dc2626"}}>BAKIM KAYDINI SİL</div>
+            </div>
+            <div style={{fontSize:13,color:"#1a1a1a",marginBottom:20,lineHeight:1.8,padding:"12px",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:"4px"}}>
+              <div style={{marginBottom:8}}><strong>Bu işlem geri alınamaz!</strong></div>
+              <div style={{marginBottom:10}}>
+                <strong>{new Date(bakimSilModal.tarih).toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric" })}</strong> tarihindeki bakım kaydını silmek istediğinize emin misiniz?
+              </div>
+              <div style={{fontSize:12,color:"#666",borderTop:"1px solid #fecaca",paddingTop:8}}>
+                <div>👤 Teknisyen: <strong>{bakimSilModal.yapan}</strong></div>
+                {bakimSilModal.notlar && <div>📝 Not: <strong>{bakimSilModal.notlar}</strong></div>}
+              </div>
             </div>
             <div className="m-acts">
-              <button className="btn-s" onClick={() => setBakimSilModal(null)}>İptal</button>
-              <button className="btn btn-sm" style={{background:"#dc2626"}} onClick={bakimSilOnayla}>SİL</button>
+              <button className="btn-s" onClick={() => setBakimSilModal(null)} style={{flex:1}}>İptal</button>
+              <button className="btn btn-sm" style={{background:"#dc2626",flex:1}} onClick={bakimSilOnayla}>EVET, SİL</button>
             </div>
           </div>
         </div>
