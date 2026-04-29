@@ -488,11 +488,7 @@ export default function App() {
     if (!seciliCihazId || !bakimForm.tarih) return;
     const checkNotlar = bakimForm.checkboxlar.length > 0 ? bakimForm.checkboxlar.join(", ") : "";
     const birlesikNot = [checkNotlar, bakimForm.notlar].filter(Boolean).join("\n");
-    const yeni = [...bakimlar, {
-      id: Date.now(), cihazId: seciliCihazId, tarih: bakimForm.tarih,
-      yapan: aktifKullanici.ad, notlar: birlesikNot,
-      ekleyen: aktifKullanici.ad
-    }];
+    const yeni = [...bakimlar, { id: Date.now(), cihazId: seciliCihazId, tarih: bakimForm.tarih, yapan: aktifKullanici.ad, notlar: birlesikNot, ekleyen: aktifKullanici.ad }];
     setBakimlar(yeni);
     await kaydetVeri(kurumlar, cihazlar, yeni, yedekTablolar);
     setBakimForm({ tarih: new Date().toISOString().split("T")[0], notlar: "", checkboxlar: [] });
@@ -540,18 +536,28 @@ export default function App() {
   async function yedekTablo_hucreGuncelle(tabloId, satirId, kolIdx, deger) {
     const yeni = yedekTablolar.map(t => t.id === tabloId
       ? { ...t, satirlar: t.satirlar.map(s => s.id === satirId
-          ? { ...s, hücreler: s.hücreler.map((c, i) => i === kolIdx ? deger : c) }
-          : s) }
+          ? { ...s, hücreler: s.hücreler.map((h, i) => i === kolIdx ? deger : h) }
+          : s
+        )}
       : t
     );
     setYedekTablolar(yeni);
     await kaydetVeri(kurumlar, cihazlar, bakimlar, yeni);
   }
 
-  async function yedekTablo_kolEkle(tabloId) {
+  async function yedekTablo_sutunGuncelle(tabloId, kolIdx, deger) {
+    const yeni = yedekTablolar.map(t => t.id === tabloId
+      ? { ...t, sutunlar: t.sutunlar.map((s, i) => i === kolIdx ? deger : s) }
+      : t
+    );
+    setYedekTablolar(yeni);
+    await kaydetVeri(kurumlar, cihazlar, bakimlar, yeni);
+  }
+
+  async function yedekTablo_sutunEkle(tabloId) {
     const yeni = yedekTablolar.map(t => t.id === tabloId
       ? { ...t,
-          sutunlar: [...t.sutunlar, "YENİ KOLON"],
+          sutunlar: [...t.sutunlar, "Sütun"],
           satirlar: t.satirlar.map(s => ({ ...s, hücreler: [...s.hücreler, ""] }))
         }
       : t
@@ -560,7 +566,7 @@ export default function App() {
     await kaydetVeri(kurumlar, cihazlar, bakimlar, yeni);
   }
 
-  async function yedekTablo_kolSil(tabloId, kolIdx) {
+  async function yedekTablo_sutunSil(tabloId, kolIdx) {
     const yeni = yedekTablolar.map(t => t.id === tabloId
       ? { ...t,
           sutunlar: t.sutunlar.filter((_, i) => i !== kolIdx),
@@ -572,447 +578,780 @@ export default function App() {
     await kaydetVeri(kurumlar, cihazlar, bakimlar, yeni);
   }
 
-  async function yedekTablo_baslikGuncelle(tabloId, kolIdx, deger) {
-    const yeni = yedekTablolar.map(t => t.id === tabloId
-      ? { ...t, sutunlar: t.sutunlar.map((c, i) => i === kolIdx ? deger : c) }
-      : t
-    );
+  async function yedekTablo_isimGuncelle(tabloId, yeniIsimDeger) {
+    if (!yeniIsimDeger || !yeniIsimDeger.trim()) return;
+    const yeni = yedekTablolar.map(t => t.id === tabloId ? { ...t, isim: yeniIsimDeger.trim() } : t);
     setYedekTablolar(yeni);
+    setNotIsmiDuzenle(null);
     await kaydetVeri(kurumlar, cihazlar, bakimlar, yeni);
   }
 
-  async function yedekTablo_isimGuncelle(tabloId, yeniIsim) {
-    const yeni = yedekTablolar.map(t => t.id === tabloId ? { ...t, isim: yeniIsim } : t);
-    setYedekTablolar(yeni);
-    await kaydetVeri(kurumlar, cihazlar, bakimlar, yeni);
-  }
 
-  const sCihazlar = useMemo(() => {
-    let list = cihazlar;
-    if (seciliKurumId) list = list.filter(c => c.kurumId === seciliKurumId);
-    if (seciliLine) list = list.filter(c => c.line === seciliLine);
-    if (arama) {
-      const a = arama.toLowerCase();
-      list = list.filter(c => c.ad.toLowerCase().includes(a) || c.seri.toLowerCase().includes(a));
-    }
-    if (statFiltre) {
-      list = list.filter(c => {
-        const t = sonPinchHatTarih(c.id);
-        const g = gunFarki(t);
-        if (statFiltre === "ok") return g !== null && g <= 30;
-        if (statFiltre === "wn") return g !== null && g > 30 && g <= 45;
-        if (statFiltre === "cr") return g === null || g > 45;
-        return true;
-      });
-    }
-    return list;
-  }, [cihazlar, seciliKurumId, arama, statFiltre, seciliLine]);
 
-  const sBakimlar = useMemo(() => {
-    if (!seciliCihazId) return [];
-    return bakimlar.filter(b => b.cihazId === seciliCihazId).sort((a,b) => new Date(b.tarih) - new Date(a.tarih));
-  }, [bakimlar, seciliCihazId]);
+  const kurumCihazlari = useMemo(() => {
+    if (!seciliKurumId) return [];
+    return cihazlar.filter(c => {
+      if (c.kurumId !== seciliKurumId) return false;
+      // Kurum 1 ise line filtresi uygula
+      if (seciliKurumId === 1 && seciliLine) {
+        if (c.line !== seciliLine) return false;
+      }
+      return arama === "" ||
+        c.ad.toLowerCase().includes(arama.toLowerCase()) ||
+        (c.seri||"").toLowerCase().includes(arama.toLowerCase());
+    });
+  }, [cihazlar, seciliKurumId, arama, seciliLine]);
 
-  if (!yuklendi) return <div className="loading">SİSTEM YÜKLENİYOR...</div>;
+  const cihazBakimlari = useMemo(() =>
+    seciliCihazId ? bakimlar.filter(b => b.cihazId === seciliCihazId)
+      .sort((a,b) => {
+        const tarihFark = new Date(b.tarih) - new Date(a.tarih);
+        if (tarihFark !== 0) return tarihFark;
+        return b.id - a.id; // aynı tarihse eklenme sırasına göre (yeni üstte)
+      }) : [],
+    [bakimlar, seciliCihazId]
+  );
 
-  if (!aktifKullanici) {
-    return (
-      <div className="app">
-        <style>{CSS}</style>
-        <div className="login-wrap">
-          <div className="login-bg" />
-          <div className="login-card">
-            <div className="login-logo">NUKLEUS <span>BAKIM</span></div>
-            <div className="login-sub">Cihaz Takip Sistemi v3.0</div>
-            <div className="fg">
-              <label className="login-label">E-POSTA ADRESİ</label>
-              <input className="login-input" type="email" value={loginForm.mail} onChange={e => setLoginForm({...loginForm, mail: e.target.value})} placeholder="mail@nukleus.com.tr" />
-            </div>
-            <div className="fg" style={{marginBottom: 10}}>
-              <label className="login-label">ŞİFRE</label>
-              <input className="login-input" type="password" value={loginForm.sifre} onChange={e => setLoginForm({...loginForm, sifre: e.target.value})} placeholder="••••••••" onKeyDown={e => e.key === 'Enter' && login()} />
-            </div>
-            <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:20}}>
-              <input type="checkbox" id="hatirla" checked={beniHatirla} onChange={e => setBeniHatirla(e.target.checked)} style={{accentColor:"#e85d26"}} />
-              <label htmlFor="hatirla" style={{margin:0, color:"#aaa", fontSize:10, cursor:"pointer"}}>BENİ HATIRLA</label>
-            </div>
-            <button className="login-btn" onClick={login}>SİSTEME GİRİŞ YAP</button>
-            {loginErr && <div className="login-err">{loginErr}</div>}
+  // LOGIN
+  if (!aktifKullanici) return (
+    <div className="app">
+      <style>{CSS}</style>
+      <div className="login-wrap">
+        <div className="login-bg" />
+        <div className="login-card">
+          <div className="login-logo">BAKIM<span>.</span>TAKİP</div>
+          <div className="login-sub">Cihaz Bakım Yönetim Sistemi</div>
+          <label className="login-label">Mail Adresi</label>
+          <input className="login-input" placeholder="ornek@nukleus.com.tr" value={loginForm.mail}
+            onChange={e => setLoginForm({...loginForm, mail: e.target.value})}
+            onKeyDown={e => e.key==="Enter" && login()} />
+          <label className="login-label">Şifre</label>
+          <input className="login-input" type="password" placeholder="••••••" value={loginForm.sifre}
+            onChange={e => setLoginForm({...loginForm, sifre: e.target.value})}
+            onKeyDown={e => e.key==="Enter" && login()} />
+          <button className="login-btn" onClick={login}>GİRİŞ YAP</button>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginTop:14}}>
+            <input type="checkbox" id="hatirla" checked={beniHatirla}
+              onChange={e => setBeniHatirla(e.target.checked)}
+              style={{width:16,height:16,accentColor:"#e85d26",cursor:"pointer"}} />
+            <label htmlFor="hatirla" style={{fontSize:12,color:"#888",cursor:"pointer",letterSpacing:"0.5px"}}>
+              Beni hatırla
+            </label>
           </div>
+          <button className="login-link" onClick={() => { setSifreSifirlamaMsg(""); setSifreSifirlamaErr(""); setModal("sifremiUnuttum"); }}>
+            Şifremi Unuttum?
+          </button>
+          {loginErr && <div className="login-err">{loginErr}</div>}
         </div>
       </div>
-    );
-  }
+
+      {/* MODAL: ŞİFRESİNİ UNUTTUM (LOGIN PAGE) */}
+      {modal === "sifremiUnuttum" && (
+        <div className="ov" onClick={() => setModal(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="m-title">ŞİFREMİ UNUTTUM</div>
+            <div style={{fontSize:12,color:"#888",marginBottom:20,lineHeight:1.6}}>
+              Mail adresinizi girin. Şifre sıfırlama linki mail'e gönderilecek.
+            </div>
+            <div className="fg">
+              <label>Mail Adresi</label>
+              <input className="fi" autoFocus placeholder="ornek@nukleus.com.tr"
+                value={loginForm.mail}
+                onChange={e => setLoginForm({...loginForm, mail: e.target.value})}
+                onKeyDown={e => {
+                  if (e.key === "Enter" && loginForm.mail.trim()) {
+                    sendPasswordResetEmail(auth, loginForm.mail.trim())
+                      .then(() => setSifreSifirlamaMsg("Mail gönderildi! İnbox'ınızı kontrol edin."))
+                      .catch(() => setSifreSifirlamaErr("Bu mail sisteme tanımlı değil."));
+                  }
+                }} />
+            </div>
+            {sifreSifirlamaMsg && <div className="m-ok" style={{marginBottom:12}}>✓ {sifreSifirlamaMsg}</div>}
+            {sifreSifirlamaErr && <div className="m-err" style={{marginBottom:12}}>⚠ {sifreSifirlamaErr}</div>}
+            <div className="m-acts">
+              <button className="btn-s" onClick={() => { setModal(null); setSifreSifirlamaMsg(""); setSifreSifirlamaErr(""); }}>İptal</button>
+              <button className="btn btn-sm" onClick={() => {
+                if (loginForm.mail.trim()) {
+                  sendPasswordResetEmail(auth, loginForm.mail.trim())
+                    .then(() => setSifreSifirlamaMsg("Mail gönderildi! İnbox'ınızı kontrol edin."))
+                    .catch(() => setSifreSifirlamaErr("Bu mail sisteme tanımlı değil."));
+                } else {
+                  setSifreSifirlamaErr("Lütfen mail adresi girin.");
+                }
+              }}>MAİL GÖNDER</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  if (!yuklendi) return (
+    <div className="app"><style>{CSS}</style>
+      <div className="loading">VERİLER YÜKLENİYOR...</div>
+    </div>
+  );
 
   return (
     <div className="app">
       <style>{CSS}</style>
-      <header className="hdr">
-        <div className="logo" onClick={goGenel}>NUKLEUS <span>BAKIM</span></div>
-        <div className="hdr-mid" style={{flex:1, maxWidth:400, margin:"0 20px"}}>
-          <select className="kurum-select-main" value={seciliKurumId || ""} onChange={e => {
-            const val = e.target.value;
-            if (!val) goGenel(); else goKurum(Number(val));
-          }}>
-            <option value="">TÜM KURUMLAR (GENEL BAKIŞ)</option>
-            {kurumlar.map(k => <option key={k.id} value={k.id}>{k.ad}</option>)}
-          </select>
-        </div>
+
+      {/* HEADER */}
+      <div className="hdr">
+        <div className="logo" onClick={goGenel}>BAKIM<span>.</span>TAKİP</div>
+
         <div className="hdr-right">
-          <div className="hdr-user">👤 <span>{aktifKullanici.ad.toUpperCase()}</span></div>
-          <button className="hdr-btn" onClick={() => setModal("sifre")}>ŞİFRE</button>
+          <span style={{fontSize:10,color:"#555",letterSpacing:1}}>
+            <span className={`sync-dot ${syncing?"syncing":""}`}/>
+            {syncing ? "KAYDEDİLİYOR" : "CANLI"}
+          </span>
+          <span className="hdr-user">👤 <span>{aktifKullanici.ad}</span></span>
+          <button className="hdr-btn" onClick={() => { setSifreForm({eski:"",yeni:"",tekrar:""}); setSifreErr(""); setSifreOk(""); setModal("sifre"); }}>ŞİFRE</button>
           <button className="hdr-btn" onClick={cikisYap}>ÇIKIŞ</button>
-          {syncing && <span className="sync-dot syncing" title="Senkronize ediliyor..." />}
         </div>
-      </header>
+      </div>
 
       <div className="layout">
-        <aside className="sidebar">
+        {/* SIDEBAR */}
+        <div className="sidebar">
           <div className="sb-home" onClick={goGenel}>
             <span style={{fontSize:16}}>🏠</span>
-            <span className="sb-home-txt">GENEL DURUM</span>
+            <span className="sb-home-txt">Ana Sayfa</span>
           </div>
-          <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 16px 12px"}}>
-            <div className="sb-title">KURUMLAR</div>
-            <button className="sb-add-btn" onClick={() => setModal("kurumEkle")}>+</button>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 16px 12px"}}>
+            <div className="sb-title" style={{padding:0}}>Kurumlar</div>
+            <button className="sb-add-btn" onClick={() => setModal("kurumEkle")} title="Kurum ekle">+</button>
           </div>
           {kurumlar.map(k => {
-            const s = ist(k.id);
+            const i = ist(k.id);
             return (
-              <div key={k.id} className={`ki ${seciliKurumId === k.id ? "active" : ""}`} onClick={() => goKurum(k.id)}>
-                <div style={{overflow:"hidden"}}>
+              <div key={k.id} className={`ki ${seciliKurumId===k.id?"active":""}`} onClick={() => goKurum(k.id)}>
+                <div style={{flex:1,minWidth:0}}>
                   <div className="ki-name">{k.ad}</div>
-                  <div className="ki-meta">{s.toplam} Cihaz</div>
+                  <div className="ki-meta">
+                    {i.toplam} cihaz
+                    {i.kritik > 0 && <span style={{color:"#f87171",marginLeft:5}}>• {i.kritik} kritik</span>}
+                    {i.warn > 0 && i.kritik===0 && <span style={{color:"#fbbf24",marginLeft:5}}>• {i.warn} uyarı</span>}
+                  </div>
                 </div>
-                <button className="ki-edit" onClick={(e) => { e.stopPropagation(); setIsimModal(k); setYeniIsim(k.ad); setModal("isim"); }}>✎</button>
+                <div style={{display:"flex",gap:2}}>
+                  <button className="ki-edit" title="İsim değiştir"
+                    onClick={e => { e.stopPropagation(); setIsimModal(k); setYeniIsim(k.ad); setModal("isim"); }}>✎</button>
+                  <button className="ki-edit" title="Kurumu sil" style={{color:"#444"}}
+                    onClick={e => { e.stopPropagation(); setModal("kurumSil"); setIsimModal(k); }}>🗑</button>
+                </div>
               </div>
             );
           })}
-          <div style={{marginTop:20, padding:"0 16px"}}>
-            <button className="btn btn-sm" style={{width:"100%", background:"#222", border:"1px solid #333"}} onClick={() => setTeknikBilgiEkran(true)}>
-              📋 TEKNİK BİLGİLER
-            </button>
-          </div>
-        </aside>
+        </div>
 
-        <main className="main">
+        <div className="main">
+
+          {/* Her sayfada ANA SAYFA butonu */}
+          {ekran !== "kurumlar" && (
+            <div className="page-hdr">
+              <button className="home-btn" onClick={goGenel}>🏠 ANA SAYFA</button>
+              <div className="bc">
+                <span>›</span>
+                {ekran === "kurumDetay" && seciliKurum && (
+                  <span style={{color:"#1a1a1a"}}>{seciliKurum.ad}</span>
+                )}
+                {ekran === "cihazDetay" && seciliCihaz && (
+                  <>
+                    <button className="bcl" onClick={() => goKurum(seciliCihaz.kurumId)}>
+                      {kurumlar.find(k=>k.id===seciliCihaz.kurumId)?.ad}
+                    </button>
+                    <span>›</span>
+                    <span style={{color:"#1a1a1a"}}>{seciliCihaz.ad}</span>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* GENEL BAKIŞ */}
           {ekran === "kurumlar" && (
-            <div>
-              <div className="page-hdr"><div className="kd-title">SİSTEM GENEL DURUMU</div></div>
+            <>
               <div className="stats">
-                <div className="sc t" style={{cursor:"pointer"}} onClick={() => setStatFiltre("")}>
-                  <div className="sc-l">TOPLAM CİHAZ</div>
+                <div className="sc t" style={{cursor:"default"}}>
+                  <div className="sc-l">Toplam Cihaz</div>
                   <div className="sc-v">{genelIst.toplam}</div>
                 </div>
-                <div className="sc ok" style={{cursor:"pointer"}} onClick={() => setStatFiltre(statFiltre === "ok" ? "" : "ok")}>
-                  <div className="sc-l">BAKIMI GÜNCEL</div>
+                <div className="sc ok" style={{cursor:"pointer",outline: statFiltre==="ok"?"2px solid #4ade80":"none"}}
+                  onClick={() => setStatFiltre(statFiltre==="ok" ? "" : "ok")}>
+                  <div className="sc-l">Güncel ≤30g {statFiltre==="ok" && "✓"}</div>
                   <div className="sc-v">{genelIst.ok}</div>
                 </div>
-                <div className="sc wn" style={{cursor:"pointer"}} onClick={() => setStatFiltre(statFiltre === "wn" ? "" : "wn")}>
-                  <div className="sc-l">YAKLAŞANLAR</div>
+                <div className="sc wn" style={{cursor:"pointer",outline: statFiltre==="warn"?"2px solid #fbbf24":"none"}}
+                  onClick={() => setStatFiltre(statFiltre==="warn" ? "" : "warn")}>
+                  <div className="sc-l">Uyarı 30-45g {statFiltre==="warn" && "✓"}</div>
                   <div className="sc-v">{genelIst.warn}</div>
                 </div>
-                <div className="sc cr" style={{cursor:"pointer"}} onClick={() => setStatFiltre(statFiltre === "cr" ? "" : "cr")}>
-                  <div className="sc-l">GECİKEN / YOK</div>
+                <div className="sc cr" style={{cursor:"pointer",outline: statFiltre==="kritik"?"2px solid #f87171":"none"}}
+                  onClick={() => setStatFiltre(statFiltre==="kritik" ? "" : "kritik")}>
+                  <div className="sc-l">Kritik/Bakımsız {statFiltre==="kritik" && "✓"}</div>
                   <div className="sc-v">{genelIst.kritik}</div>
                 </div>
               </div>
 
-              <div className="tb">
-                <input className="inp inp-g" placeholder="Cihaz adı veya seri no ile ara..." value={arama} onChange={e => setArama(e.target.value)} />
+              {/* Stat filtresi aktifse cihaz listesi göster */}
+              {statFiltre && (() => {
+                const filtrelenmis = cihazlar.filter(c => {
+                  const ilgili = bakimlar.filter(b => b.cihazId === c.id && b.notlar && (
+                    b.notlar.includes("Pinch Tube Değişimi") || b.notlar.includes("Hat Bakımı")
+                  ));
+                  const sonTarih = ilgili.length > 0 ? ilgili.reduce((en, b) => (!en || new Date(b.tarih) > new Date(en)) ? b.tarih : en, null) : null;
+                  const g = gunFarki(sonTarih);
+                  if (statFiltre === "ok")    return g !== null && g <= 30;
+                  if (statFiltre === "warn")  return g !== null && g > 30 && g <= 45;
+                  if (statFiltre === "kritik") return g === null || g > 45;
+                  return false;
+                });
+                const baslik = statFiltre==="ok" ? "Güncel Cihazlar (≤30g)" : statFiltre==="warn" ? "Uyarı Cihazlar (30-45g)" : "Kritik / Bakımsız Cihazlar";
+                return (
+                  <div style={{marginBottom:20}}>
+                    <div style={{fontSize:10,letterSpacing:2,textTransform:"uppercase",color:"#999",margin:"16px 0 10px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <span>{baslik} ({filtrelenmis.length})</span>
+                      <button onClick={() => setStatFiltre("")} style={{background:"none",border:"none",color:"#bbb",cursor:"pointer",fontSize:18,lineHeight:1}}>×</button>
+                    </div>
+                    {filtrelenmis.length === 0 ? (
+                      <div className="empty" style={{padding:"24px"}}><p>Cihaz bulunamadı.</p></div>
+                    ) : (
+                      <div className="tw">
+                        <table>
+                          <thead>
+                            <tr><th>Cihaz</th><th>Kurum</th><th>Son Bakım</th><th>Durum</th></tr>
+                          </thead>
+                          <tbody>
+                            {filtrelenmis.map(c => {
+                              const sb = sonBakimlar[c.id];
+                              const kurum = kurumlar.find(k=>k.id===c.kurumId);
+                              return (
+                                <tr key={c.id} style={{cursor:"pointer"}} onClick={() => { goKurum(c.kurumId); setTimeout(()=>goCihaz(c.id),50); }}>
+                                  <td style={{fontWeight:600}}>{c.ad}</td>
+                                  <td><span className="ktag">{kurum?.ad}</span></td>
+                                  <td style={{fontSize:11}}>{fmt(sb?.tarih)}</td>
+                                  <td><Durum tarih={sb?.tarih} sm /></td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              <div style={{marginTop: statFiltre ? 4 : 8}}>
+                <div style={{fontSize:9,letterSpacing:2,textTransform:"uppercase",color:"#999",marginBottom:8}}>Kurum Seçin</div>
+                <select className="kurum-select-main"
+                  value={seciliKurumId ?? ""}
+                  onChange={e => {
+                    const val = e.target.value;
+                    if (val !== "") goKurum(Number(val));
+                  }}>
+                  <option value="">— Kurum Seçiniz —</option>
+                  {kurumlar.map(k => (
+                    <option key={k.id} value={k.id}>{k.ad}</option>
+                  ))}
+                </select>
               </div>
 
-              <div className="tw">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>KURUM</th>
-                      <th>CİHAZ / MODEL</th>
-                      <th>SERİ NO</th>
-                      <th>SON PINCH/HAT</th>
-                      <th>DURUM</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sCihazlar.map(c => {
-                      const t = sonPinchHatTarih(c.id);
-                      const k = kurumlar.find(kr => kr.id === c.kurumId);
-                      return (
-                        <tr key={c.id} style={{cursor:"pointer"}} onClick={() => { setSeciliKurumId(c.kurumId); goCihaz(c.id); }}>
-                          <td style={{color:"#888", fontSize:11}}>{k?.ad || "—"}</td>
-                          <td style={{fontWeight:600}}>{c.ad}</td>
-                          <td style={{fontFamily:"monospace"}}>{c.seri || "—"}</td>
-                          <td>{fmt(t)}</td>
-                          <td><Durum tarih={t} sm /></td>
-                        </tr>
-                      );
-                    })}
-                    {sCihazlar.length === 0 && <tr><td colSpan="5" className="empty">Kayıt bulunamadı.</td></tr>}
-                  </tbody>
-                </table>
+              {/* TEKNİK BİLGİ */}
+              <div style={{marginTop:20}}>
+                <div style={{fontSize:9,letterSpacing:2,textTransform:"uppercase",color:"#999",marginBottom:8}}>Teknik Bilgi</div>
+                <select className="kurum-select-main" value={seciliYedekNo}
+                  onChange={e => {
+                    setSeciliYedekNo(e.target.value);
+                    if (e.target.value !== "") { setTeknikBilgiEkran(true); setEkran("kurumlar"); }
+                  }}>
+                  <option value="">— Not Seçiniz —</option>
+                  {yedekTablolar.map(t => (
+                    <option key={t.id} value={String(t.id)}>{t.isim}</option>
+                  ))}
+                </select>
               </div>
-            </div>
+            </>
           )}
 
+          {/* KURUM DETAY */}
           {ekran === "kurumDetay" && seciliKurum && (
-            <div>
+            <>
               <div className="kd-hdr">
-                <div className="bc"><span className="bcl" onClick={goGenel}>Kayıtlar</span> <span>/</span> <span style={{color:"#1a1a1a"}}>{seciliKurum.ad}</span></div>
                 <div className="kd-ust">
                   <div>
                     <div className="kd-title">{seciliKurum.ad}</div>
-                    <div className="kd-meta">{ist(seciliKurum.id).toplam} Sistem Tanımlı</div>
+                    <div className="kd-meta">
+                      {ist(seciliKurum.id).toplam} cihaz
+                      {ist(seciliKurum.id).ok > 0 && <span style={{color:"#16a34a"}}> · {ist(seciliKurum.id).ok} güncel</span>}
+                      {ist(seciliKurum.id).warn > 0 && <span style={{color:"#a16207"}}> · {ist(seciliKurum.id).warn} uyarı</span>}
+                      {ist(seciliKurum.id).kritik > 0 && <span style={{color:"#dc2626"}}> · {ist(seciliKurum.id).kritik} kritik</span>}
+                    </div>
                   </div>
                   <div className="kd-acts">
-                    <button className="btn" onClick={() => setModal("cihazEkle")}>+ YENİ CİHAZ EKLE</button>
-                    <button className="btn-s" style={{color:"#dc2626", borderColor:"#fecaca"}} onClick={() => setModal("kurumSil")}>KURUMU SİL</button>
+                    <button className="btn-s btn-s-sm" onClick={() => { setIsimModal(seciliKurum); setYeniIsim(seciliKurum.ad); setModal("isim"); }}>✎ İsim Değiştir</button>
+                    {(seciliKurumId !== 1 || seciliLine) &&
+                      <button className="btn btn-sm" onClick={() => setModal("cihazEkle")}>+ CİHAZ EKLE</button>
+                    }
                   </div>
                 </div>
               </div>
 
-              <div className="stats">
-                <div className="sc t" onClick={() => setStatFiltre("")} style={{cursor:"pointer"}}>
-                  <div className="sc-l">TOPLAM</div>
-                  <div className="sc-v">{ist(seciliKurum.id).toplam}</div>
-                </div>
-                <div className="sc ok" onClick={() => setStatFiltre("ok")} style={{cursor:"pointer"}}>
-                  <div className="sc-l">GÜNCEL</div>
-                  <div className="sc-v">{ist(seciliKurum.id).ok}</div>
-                </div>
-                <div className="sc wn" onClick={() => setStatFiltre("wn")} style={{cursor:"pointer"}}>
-                  <div className="sc-l">YAKLAŞAN</div>
-                  <div className="sc-v">{ist(seciliKurum.id).warn}</div>
-                </div>
-                <div className="sc cr" onClick={() => setStatFiltre("cr")} style={{cursor:"pointer"}}>
-                  <div className="sc-l">KRİTİK</div>
-                  <div className="sc-v">{ist(seciliKurum.id).kritik}</div>
-                </div>
-              </div>
-
+              {/* KURUM 1 İÇİN LINE DROPDOWN */}
               {seciliKurumId === 1 && (
-                <div style={{display:"flex", gap:6, marginBottom:16, flexWrap:"wrap"}}>
-                  <button className={`btn-s-sm ${seciliLine === "" ? "active" : ""}`} onClick={() => setSeciliLine("")} style={seciliLine === "" ? {background:"#1a1a1a",color:"#fff"} : {}}>TÜMÜ</button>
-                  {LINES.map(l => (
-                    <button key={l} className={`btn-s-sm ${seciliLine === l ? "active" : ""}`} onClick={() => setSeciliLine(l)} style={seciliLine === l ? {background:"#1a1a1a",color:"#fff"} : {}}>{l}</button>
-                  ))}
+                <div style={{marginBottom:20}}>
+                  <div style={{fontSize:9,letterSpacing:2,textTransform:"uppercase",color:"#999",marginBottom:8}}>Line Seçin</div>
+                  <select className="kurum-select-main"
+                    value={seciliLine}
+                    onChange={e => setSeciliLine(e.target.value)}>
+                    <option value="">— Line Seçiniz —</option>
+                    {LINES.map(l => (
+                      <option key={l} value={l}>{l}</option>
+                    ))}
+                  </select>
                 </div>
               )}
 
-              <div className="tb">
-                <input className="inp inp-g" placeholder="Cihaz veya seri no..." value={arama} onChange={e => setArama(e.target.value)} />
-              </div>
-
-              <div className="cg">
-                {sCihazlar.map(c => {
-                  const t = sonPinchHatTarih(c.id);
-                  return (
-                    <div key={c.id} className="cc" onClick={() => goCihaz(c.id)}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                        <div className="cc-ad">{c.ad}</div>
-                        <button className="cc-del" onClick={(e) => { e.stopPropagation(); setCihazSilModal(c); }}>×</button>
-                      </div>
-                      <div className="ktag">{c.seri || "Seri No Yok"}</div>
-                      {c.line && <div className="ktag" style={{marginLeft:4, background:"#1a1a1a", color:"#fff"}}>{c.line}</div>}
-                      <div className="cc-sb">Son Pinch/Hat:</div>
-                      <div className="cc-alt">
-                        <span style={{fontSize:11, fontWeight:600}}>{fmt(t)}</span>
-                        <Durum tarih={t} />
-                      </div>
-                    </div>
-                  );
-                })}
-                {sCihazlar.length === 0 && <div className="empty" style={{gridColumn:"1/-1"}}>Henüz cihaz eklenmemiş.</div>}
-              </div>
-            </div>
-          )}
-
-          {ekran === "cihazDetay" && seciliCihaz && (
-            <div>
-              <div className="kd-hdr">
-                <div className="bc">
-                  <span className="bcl" onClick={goGenel}>Kayıtlar</span> <span>/</span>
-                  <span className="bcl" onClick={() => goKurum(seciliKurum.id)}>{seciliKurum?.ad}</span> <span>/</span>
-                  <span style={{color:"#1a1a1a"}}>{seciliCihaz.ad}</span>
+              {/* Kurum 1 ise ve line seçilmemişse içerik gösterme */}
+              {seciliKurumId === 1 && !seciliLine ? (
+                <div className="empty">
+                  <div className="ico">🏭</div>
+                  <p>Lütfen yukarıdan bir line seçin.</p>
                 </div>
-                <div className="dh">
-                  <div>
-                    <div className="d-title">{seciliCihaz.ad}</div>
-                    <div className="d-meta">
-                      <span className="ktag">S/N: {seciliCihaz.seri || "—"}</span>
-                      {seciliCihaz.line && <span className="ktag" style={{background:"#1a1a1a", color:"#fff"}}>{seciliCihaz.line}</span>}
-                      <span>•</span>
-                      <span>Son Pinch/Hat: <strong>{fmt(sonPinchHatTarih(seciliCihaz.id))}</strong></span>
-                      <Durum tarih={sonPinchHatTarih(seciliCihaz.id)} />
-                    </div>
+              ) : (
+                <>
+                  <div className="tb">
+                    <input className="inp inp-g" placeholder="Cihaz ara..." value={arama} onChange={e => setArama(e.target.value)} />
+                    {seciliKurumId === 1 && seciliLine &&
+                      <div style={{fontSize:11,color:"#e85d26",fontWeight:600,whiteSpace:"nowrap",alignSelf:"center"}}>📍 {seciliLine}</div>
+                    }
                   </div>
-                  <button className="btn" onClick={() => setModal("bakimEkle")}>+ YENİ BAKIM KAYDI</button>
-                </div>
-              </div>
-
-              <div className="bl">
-                {sBakimlar.map(b => {
-                  const dt = new Date(b.tarih);
-                  const isPinchHat = b.notlar && (b.notlar.includes("Pinch Tube Değişimi") || b.notlar.includes("Hat Bakımı"));
-                  return (
-                    <div key={b.id} className="bi" style={isPinchHat ? {borderLeftColor:"#16a34a", background:"#f0fdf4"} : {}}>
-                      <div className="b-box">
-                        <div className="b-gun" style={isPinchHat ? {color:"#16a34a"} : {}}>{dt.getDate()}</div>
-                        <div className="b-ay">{dt.toLocaleDateString("tr-TR", { month: "short" }).toUpperCase()}</div>
-                      </div>
-                      <div className="b-det">
-                        <div className="b-who">{b.yapan}</div>
-                        <div className="b-note" style={{whiteSpace:"pre-wrap"}}>{b.notlar || "Not girilmedi."}</div>
-                        <div className="b-editor">Kayıt: {b.ekleyen} | {new Date(b.id).toLocaleString("tr-TR")}</div>
-                      </div>
-                      <button className="b-del" onClick={() => setBakimSilModal(b)}>🗑️</button>
+                  {kurumCihazlari.length === 0 ? (
+                    <div className="empty">
+                      <div className="ico">🏥</div>
+                      <p>{cihazlar.filter(c=>c.kurumId===seciliKurumId && (seciliKurumId!==1 || c.line===seciliLine)).length===0
+                        ? "Henüz cihaz eklenmedi." : "Sonuç bulunamadı."}</p>
                     </div>
-                  );
-                })}
-                {sBakimlar.length === 0 && <div className="empty">Bu cihaz için henüz bakım kaydı bulunmuyor.</div>}
-              </div>
-            </div>
+                  ) : (
+                    <div className="cg">
+                      {kurumCihazlari.map(c => {
+                        const sb = sonBakimlar[c.id];
+                        const ilgiliB = bakimlar.filter(b => b.cihazId === c.id && b.notlar && (
+                          b.notlar.includes("Pinch Tube Değişimi") || b.notlar.includes("Hat Bakımı")
+                        ));
+                        const phTarih = ilgiliB.length > 0 ? ilgiliB.reduce((en, b) => (!en || new Date(b.tarih) > new Date(en)) ? b.tarih : en, null) : null;
+                        return (
+                          <div key={c.id} className="cc" onClick={() => goCihaz(c.id)}>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"start"}}>
+                              <div>
+                                <div className="cc-ad">{c.ad}</div>
+                                {c.seri && <div style={{fontSize:13,color:"#1a1a1a",fontWeight:700,letterSpacing:"0.5px"}}>S/N: {c.seri}</div>}
+                              </div>
+                              <button className="cc-del" onClick={e => {e.stopPropagation(); setCihazSilModal(c);}} title="Cihazı sil">🗑</button>
+                            </div>
+                            <div className="cc-sb">Son Bakım</div>
+                            <div className="cc-alt">
+                              <div style={{fontSize:12,fontWeight:500}}>{fmt(sb?.tarih)}</div>
+                              <Durum tarih={phTarih} sm />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+            </>
           )}
-        </main>
+
+          {/* CİHAZ DETAY */}
+          {ekran === "cihazDetay" && seciliCihaz && (
+            <>
+              <div className="dh">
+                <div>
+                  <div className="d-title">{seciliCihaz.ad}</div>
+                  <div className="d-meta">
+                    <span className="ktag">{kurumlar.find(k=>k.id===seciliCihaz.kurumId)?.ad}</span>
+                    {seciliCihaz.seri && <span style={{color:"#1a1a1a",fontWeight:700,fontSize:14,letterSpacing:"0.5px"}}>S/N: {seciliCihaz.seri}</span>}
+                  </div>
+                </div>
+                <button className="btn btn-sm" onClick={() => { setBakimForm({ tarih: new Date().toISOString().split("T")[0], notlar: "", checkboxlar: [] }); setModal("bakimEkle"); }}>+ BAKIM EKLE</button>
+              </div>
+              {cihazBakimlari.length === 0 ? (
+                <div className="empty"><div className="ico">🔧</div><p>Henüz bakım kaydı yok.</p></div>
+              ) : (
+                <div className="bl">
+                  {cihazBakimlari.map(b => {
+                    const d = new Date(b.tarih);
+                    const canDelete = b.ekleyen === aktifKullanici.ad;
+                    return (
+                      <div key={b.id} className="bi">
+                        <div className="b-box">
+                          <div className="b-gun">{d.getDate().toString().padStart(2,"0")}</div>
+                          <div className="b-ay">{d.toLocaleDateString("tr-TR",{month:"short",year:"2-digit"})}</div>
+                        </div>
+                        <div className="b-det">
+                          <div className="b-who">👤 {b.yapan}</div>
+                          {b.notlar && <div className="b-note">{b.notlar}</div>}
+                          <div className="b-editor">Ekleyen: {b.ekleyen}</div>
+                        </div>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <Durum tarih={b.tarih} sm />
+                          {canDelete && (
+                            <button className="b-del" onClick={e => {e.stopPropagation(); setBakimSilModal(b);}} title="Bakımı sil">🗑</button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
-      {/* MODALLAR */}
+      {/* TEKNİK BİLGİ SAYFASI - TAM EKRAN OVERLAY */}
+      {teknikBilgiEkran && seciliYedekNo !== "" && (() => {
+        const tablo = yedekTablolar.find(t => String(t.id) === String(seciliYedekNo));
+        if (!tablo) return (
+          <div className="tb-overlay">
+            <div className="tb-page">
+              <button className="home-btn" onClick={() => { setTeknikBilgiEkran(false); setSeciliYedekNo(""); }}>← GERİ</button>
+              <div style={{marginTop:40,textAlign:"center",color:"#999",fontSize:13}}>Tablo yükleniyor...</div>
+            </div>
+          </div>
+        );
+        return (
+          <div className="tb-overlay">
+            <div className="tb-page">
+              {/* Sayfa Başlığı */}
+              <div className="tb-hdr">
+                <div className="tb-hdr-left">
+                  <button className="home-btn" onClick={() => { setTeknikBilgiEkran(false); setSeciliYedekNo(""); }}>
+                    ← GERİ
+                  </button>
+                  <div style={{marginLeft:16}}>
+                    <div style={{fontSize:9,letterSpacing:2,textTransform:"uppercase",color:"#999"}}>Teknik Bilgi</div>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginTop:4}}>
+                      {notIsmiDuzenle?.id === tablo.id ? (
+                        <>
+                          <input className="tb-isim-input" autoFocus
+                            value={notIsmiDuzenle.isim}
+                            onChange={e => setNotIsmiDuzenle(prev => ({...prev, isim: e.target.value}))}
+                            onKeyDown={e => {
+                              if (e.key === "Enter") yedekTablo_isimGuncelle(tablo.id, notIsmiDuzenle.isim);
+                              if (e.key === "Escape") setNotIsmiDuzenle(null);
+                            }}
+                          />
+                          <button className="btn btn-sm" onClick={() => yedekTablo_isimGuncelle(tablo.id, notIsmiDuzenle.isim)}>KAYDET</button>
+                          <button className="btn-s btn-s-sm" onClick={() => setNotIsmiDuzenle(null)}>İptal</button>
+                        </>
+                      ) : (
+                        <>
+                          <div className="tb-isim">{tablo.isim}</div>
+                          <button className="tb-edit-btn" onClick={() => setNotIsmiDuzenle({id: tablo.id, isim: tablo.isim})}>✎ İsim Değiştir</button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                  <select className="tb-not-sec"
+                    value={seciliYedekNo}
+                    onChange={e => { setSeciliYedekNo(e.target.value); setNotIsmiDuzenle(null); }}>
+                    {yedekTablolar.map(t => (
+                      <option key={t.id} value={t.id}>{t.isim}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Excel Tablo */}
+              <div className="excel-wrap" style={{marginTop:16}}>
+                <table className="excel-tbl">
+                  <thead>
+                    <tr>
+                      {tablo.sutunlar.map((s, ci) => (
+                        <th key={ci} className="excel-th">
+                          <div className="excel-th-inner">
+                            <input className="excel-th-input" value={s}
+                              onChange={e => yedekTablo_sutunGuncelle(tablo.id, ci, e.target.value)} />
+                            {tablo.sutunlar.length > 1 &&
+                              <button className="excel-del-col" onClick={() => yedekTablo_sutunSil(tablo.id, ci)}>×</button>}
+                          </div>
+                        </th>
+                      ))}
+                      <th className="excel-th-action">
+                        <button className="excel-add-col" onClick={() => yedekTablo_sutunEkle(tablo.id)}>+</button>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tablo.satirlar.map((satir, si) => (
+                      <tr key={satir.id} className={si%2===0?"excel-tr-even":"excel-tr-odd"}>
+                        {satir.hücreler.map((h, ci) => (
+                          <td key={ci} className="excel-td">
+                            <input className="excel-cell" value={h}
+                              onChange={e => yedekTablo_hucreGuncelle(tablo.id, satir.id, ci, e.target.value)} />
+                          </td>
+                        ))}
+                        <td className="excel-td-action">
+                          <button className="excel-del-row" onClick={() => yedekTablo_satirSil(tablo.id, satir.id)}>🗑</button>
+                        </td>
+                      </tr>
+                    ))}
+                    {tablo.satirlar.length === 0 && (
+                      <tr>
+                        <td colSpan={tablo.sutunlar.length+1} style={{textAlign:"center",padding:"28px",color:"#aaa",fontSize:12}}>
+                          Henüz satır yok — aşağıdan ekleyin
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <button className="excel-add-row" onClick={() => yedekTablo_satirEkle(tablo.id)}>
+                + Satır Ekle
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* MODAL: KURUM EKLE */}
       {modal === "kurumEkle" && (
         <div className="ov" onClick={() => setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="m-title">YENİ KURUM EKLE</div>
             <div className="fg">
-              <label>KURUM ADI</label>
-              <input className="fi" autoFocus value={yeniKurumAd} onChange={e => setYeniKurumAd(e.target.value)} placeholder="Örn: Şehir Hastanesi" />
+              <label>Kurum Adı</label>
+              <input className="fi" autoFocus placeholder="Kurum adını girin"
+                value={yeniKurumAd} onChange={e => setYeniKurumAd(e.target.value)}
+                onKeyDown={e => e.key==="Enter" && kurumEkle(yeniKurumAd)} />
             </div>
             <div className="m-acts">
-              <button className="btn-s" onClick={() => setModal(null)}>İPTAL</button>
-              <button className="btn" onClick={() => { kurumEkle(yeniKurumAd); setYeniKurumAd(""); }}>KAYDET</button>
+              <button className="btn-s" onClick={() => { setModal(null); setYeniKurumAd(""); }}>İptal</button>
+              <button className="btn btn-sm" onClick={() => { kurumEkle(yeniKurumAd); setYeniKurumAd(""); }}>EKLE</button>
             </div>
           </div>
         </div>
       )}
 
-      {modal === "kurumSil" && (
+      {/* MODAL: KURUM SİL */}
+      {modal === "kurumSil" && isimModal && (
         <div className="ov" onClick={() => setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="m-title" style={{color:"#dc2626"}}>KURUMU SİL</div>
-            <p style={{fontSize:12, color:"#666", marginBottom:20, lineHeight:1.6}}>
-              <strong>{seciliKurum?.ad}</strong> kurumunu ve bu kuruma bağlı <strong>tüm cihaz ve bakım kayıtlarını</strong> silmek istediğinize emin misiniz?<br/><br/>
-              Bu işlem geri alınamaz.
-            </p>
+            <div className="m-title">KURUMU SİL</div>
+            <div style={{fontSize:13,color:"#888",marginBottom:20,lineHeight:1.7}}>
+              <strong style={{color:"#dc2626"}}>{isimModal.ad}</strong> kurumunu silmek istediğinize emin misiniz?<br/>
+              <span style={{fontSize:11,color:"#f87171"}}>⚠ Bu kuruma ait tüm cihazlar ve bakım kayıtları da silinecek!</span>
+            </div>
             <div className="m-acts">
-              <button className="btn-s" onClick={() => setModal(null)}>İPTAL</button>
-              <button className="btn" style={{background:"#dc2626"}} onClick={() => kurumSil(seciliKurumId)}>EVET, HER ŞEYİ SİL</button>
+              <button className="btn-s" onClick={() => setModal(null)}>İptal</button>
+              <button className="btn btn-sm" style={{background:"#dc2626"}} onClick={() => kurumSil(isimModal.id)}>SİL</button>
             </div>
           </div>
         </div>
       )}
 
-      {modal === "isim" && (
+      {/* MODAL: KURUM İSMİ */}
+      {modal === "isim" && isimModal && (
         <div className="ov" onClick={() => setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="m-title">KURUM ADINI DÜZENLE</div>
+            <div className="m-title">KURUM İSMİ DEĞIŞTIR</div>
             <div className="fg">
-              <label>YENİ AD</label>
-              <input className="fi" autoFocus value={yeniIsim} onChange={e => setYeniIsim(e.target.value)} />
+              <label>Mevcut İsim</label>
+              <div style={{fontSize:13,color:"#888",marginBottom:14,padding:"8px 12px",background:"#faf8f4",border:"1px solid #e5e7eb"}}>{isimModal.ad}</div>
+              <label>Yeni İsim</label>
+              <input className="fi" autoFocus value={yeniIsim}
+                onChange={e => setYeniIsim(e.target.value)}
+                onKeyDown={e => e.key==="Enter" && isimKaydet()} />
             </div>
             <div className="m-acts">
-              <button className="btn-s" onClick={() => setModal(null)}>İPTAL</button>
-              <button className="btn" onClick={isimKaydet}>GÜNCELLE</button>
+              <button className="btn-s" onClick={() => setModal(null)}>İptal</button>
+              <button className="btn btn-sm" onClick={isimKaydet}>KAYDET</button>
             </div>
           </div>
         </div>
       )}
 
+      {/* MODAL: CİHAZ EKLE */}
       {modal === "cihazEkle" && (
         <div className="ov" onClick={() => setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="m-title">YENİ CİHAZ EKLE</div>
+            <div style={{fontSize:11,color:"#999",marginBottom:18,padding:"8px 12px",background:"#faf8f4",border:"1px solid #eee"}}>
+              Kurum: <strong style={{color:"#e85d26"}}>{seciliKurum?.ad}</strong>
+              {seciliKurumId === 1 && seciliLine && <span style={{marginLeft:8,color:"#e85d26"}}>/ {seciliLine}</span>}
+            </div>
             <div className="fg">
-              <label>CİHAZ MODELİ</label>
+              <label>Cihaz Türü</label>
               <select className="fi" value={cihazForm.ad} onChange={e => setCihazForm({...cihazForm, ad: e.target.value})}>
-                {CIHAZ_TURLERI.map(t => <option key={t} value={t}>{t}</option>)}
+                {CIHAZ_TURLERI.map(t => <option key={t}>{t}</option>)}
               </select>
             </div>
             <div className="fg">
-              <label>SERİ NUMARASI</label>
-              <input className="fi" value={cihazForm.seri} onChange={e => setCihazForm({...cihazForm, seri: e.target.value})} placeholder="S/N giriniz..." />
+              <label>Seri No</label>
+              <input className="fi" value={cihazForm.seri} onChange={e => setCihazForm({...cihazForm, seri: e.target.value})} />
             </div>
-            {seciliKurumId === 1 && (
-              <div className="fg">
-                <label>LINE (OPSİYONEL)</label>
-                <select className="fi" value={seciliLine} onChange={e => setSeciliLine(e.target.value)}>
-                  <option value="">SEÇİNİZ...</option>
-                  {LINES.map(l => <option key={l} value={l}>{l}</option>)}
-                </select>
-              </div>
-            )}
             <div className="m-acts">
-              <button className="btn-s" onClick={() => setModal(null)}>İPTAL</button>
-              <button className="btn" onClick={cihazEkle}>CİHAZI KAYDET</button>
+              <button className="btn-s" onClick={() => setModal(null)}>İptal</button>
+              <button className="btn btn-sm" onClick={cihazEkle}>KAYDET</button>
             </div>
           </div>
         </div>
       )}
 
-      {modal === "bakimEkle" && (
+      {/* MODAL: BAKIM EKLE */}
+      {modal === "bakimEkle" && seciliCihaz && (() => {
+        const tur = seciliCihaz.ad;
+        let checkSecenekler = [];
+        if (tur === "Hormon") {
+          checkSecenekler = ["Pinch Tube Değişimi", "Dekon Yapıldı", "Bidon Temizliği", "Hat Bakımı", "Bakım Kiti", "Hücre Değişimi"];
+        } else if (tur === "ISE") {
+          checkSecenekler = ["Bakım Kiti", "Dekon Yapıldı"];
+        } else if (tur === "Biyokimya") {
+          checkSecenekler = ["Bakım Kiti", "Dekon Yapıldı", "Vacuum Tank", "Bidon Temizliği"];
+        }
+        const toggleCheck = (item) => {
+          const var_ = bakimForm.checkboxlar.includes(item);
+          const yeni = var_ ? bakimForm.checkboxlar.filter(x => x !== item) : [...bakimForm.checkboxlar, item];
+          setBakimForm({...bakimForm, checkboxlar: yeni});
+        };
+        return (
         <div className="ov" onClick={() => setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="m-title">BAKIM KAYDI OLUŞTUR</div>
-            <div className="fg">
-              <label>BAKIM TARİHİ</label>
-              <input className="fi" type="date" value={bakimForm.tarih} onChange={e => setBakimForm({...bakimForm, tarih: e.target.value})} />
+            <div className="m-title">BAKIM KAYDI EKLE</div>
+            <div style={{fontSize:11,color:"#999",marginBottom:18,padding:"8px 12px",background:"#faf8f4",border:"1px solid #eee"}}>
+              <strong>{seciliCihaz.ad}</strong> — {kurumlar.find(k=>k.id===seciliCihaz.kurumId)?.ad}
             </div>
             <div className="fg">
-              <label>HIZLI İŞLEMLER</label>
-              <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, background:"#f8f5ef", padding:12, borderRadius:2, border:"1px solid #d0ccc4"}}>
-                {[
-                  "Pinch Tube Değişimi",
-                  "Hat Bakımı",
-                  "ISE Temizliği",
-                  "Kalibrasyon",
-                  "Genel Kontrol",
-                  "Yazılım Güncelleme"
-                ].map(item => (
-                  <label key={item} style={{display:"flex", alignItems:"center", gap:8, textTransform:"none", color:"#1a1a1a", fontSize:11, cursor:"pointer", margin:0}}>
-                    <input type="checkbox" checked={bakimForm.checkboxlar.includes(item)} onChange={e => {
-                      const list = e.target.checked ? [...bakimForm.checkboxlar, item] : bakimForm.checkboxlar.filter(i => i !== item);
-                      setBakimForm({...bakimForm, checkboxlar: list});
-                    }} style={{accentColor:"#e85d26"}} />
-                    {item}
-                  </label>
-                ))}
+              <label>Bakım Tarihi</label>
+              <input type="date" className="fi" value={bakimForm.tarih}
+                onChange={e => setBakimForm({...bakimForm, tarih: e.target.value})} />
+            </div>
+            <div className="fg">
+              <label>Teknisyen</label>
+              <input className="fi" value={aktifKullanici.ad} disabled />
+            </div>
+            {checkSecenekler.length > 0 && (
+              <div className="fg">
+                <label>Yapılan İşlemler</label>
+                <div style={{display:"flex",flexDirection:"column",gap:8,padding:"10px 12px",background:"#faf8f4",border:"1px solid #d0ccc4",borderRadius:1}}>
+                  {checkSecenekler.map(item => (
+                    <label key={item} style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",fontSize:12,color:"#1a1a1a",fontFamily:"'IBM Plex Mono',monospace",letterSpacing:"0.3px",textTransform:"none"}}>
+                      <input
+                        type="checkbox"
+                        checked={bakimForm.checkboxlar.includes(item)}
+                        onChange={() => toggleCheck(item)}
+                        style={{width:16,height:16,accentColor:"#e85d26",cursor:"pointer",flexShrink:0}}
+                      />
+                      {item}
+                    </label>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
             <div className="fg">
-              <label>EK NOTLAR</label>
-              <textarea className="fi" value={bakimForm.notlar} onChange={e => setBakimForm({...bakimForm, notlar: e.target.value})} placeholder="Yapılan diğer işlemleri yazınız..." />
+              <label>Notlar</label>
+              <textarea className="fi" placeholder="Ek notlar..." value={bakimForm.notlar}
+                onChange={e => setBakimForm({...bakimForm, notlar: e.target.value})} />
             </div>
             <div className="m-acts">
-              <button className="btn-s" onClick={() => setModal(null)}>İPTAL</button>
-              <button className="btn" onClick={bakimEkle}>KAYDI TAMAMLA</button>
+              <button className="btn-s" onClick={() => setModal(null)}>İptal</button>
+              <button className="btn btn-sm" onClick={bakimEkle}>KAYDET</button>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
+
+      {/* MODAL: ŞİFRESİNİ UNUTTUM (LOGIN) */}
+      {modal === "sifremiUnuttum" && (
+        <div className="ov" onClick={() => setModal(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="m-title">ŞİFREMİ UNUTTUM</div>
+            <div style={{fontSize:12,color:"#888",marginBottom:20,lineHeight:1.6}}>
+              Mail adresinizi girin. Şifre sıfırlama linki mail'e gönderilecek.
+            </div>
+            <div className="fg">
+              <label>Mail Adresi</label>
+              <input className="fi" autoFocus placeholder="ornek@nukleus.com.tr"
+                value={loginForm.mail}
+                onChange={e => setLoginForm({...loginForm, mail: e.target.value})}
+                onKeyDown={e => {
+                  if (e.key === "Enter" && loginForm.mail.trim()) {
+                    sendPasswordResetEmail(auth, loginForm.mail.trim())
+                      .then(() => setSifreSifirlamaMsg("Mail gönderildi! İnbox'ınızı kontrol edin."))
+                      .catch(() => setSifreSifirlamaErr("Bu mail sisteme tanımlı değil."));
+                  }
+                }} />
+            </div>
+            {sifreSifirlamaMsg && <div className="m-ok" style={{marginBottom:12}}>✓ {sifreSifirlamaMsg}</div>}
+            {sifreSifirlamaErr && <div className="m-err" style={{marginBottom:12}}>⚠ {sifreSifirlamaErr}</div>}
+            <div className="m-acts">
+              <button className="btn-s" onClick={() => { setModal(null); setSifreSifirlamaMsg(""); setSifreSifirlamaErr(""); }}>İptal</button>
+              <button className="btn btn-sm" onClick={() => {
+                if (loginForm.mail.trim()) {
+                  sendPasswordResetEmail(auth, loginForm.mail.trim())
+                    .then(() => setSifreSifirlamaMsg("Mail gönderildi! İnbox'ınızı kontrol edin."))
+                    .catch(() => setSifreSifirlamaErr("Bu mail sisteme tanımlı değil."));
+                } else {
+                  setSifreSifirlamaErr("Lütfen mail adresi girin.");
+                }
+              }}>MAİL GÖNDER</button>
             </div>
           </div>
         </div>
       )}
 
+      {/* MODAL: ŞİFRE SIFIRLAMA */}
       {modal === "sifre" && (
         <div className="ov" onClick={() => setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="m-title">ŞİFRE İŞLEMLERİ</div>
-            <div style={{fontSize:12, color:"#666", marginBottom:20, lineHeight:1.6}}>
-              Şifrenizi sıfırlamak için aşağıdaki butona tıklayabilirsiniz. Kayıtlı e-posta adresinize (<strong>{aktifKullanici.mail}</strong>) bir sıfırlama bağlantısı gönderilecektir.
+            <div className="m-title">ŞİFRE SIFIRLAMA</div>
+            <div style={{fontSize:12,color:"#888",marginBottom:20,lineHeight:1.6}}>
+              <strong style={{color:"#e85d26"}}>{aktifKullanici?.mail}</strong> adresine şifre sıfırlama maili gönderilecek. Mailinizi kontrol edin.
             </div>
-            <button className="btn" style={{width:"100%"}} onClick={sifreSifirla}>SIFIRLAMA MAİLİ GÖNDER</button>
-            {sifreSifirlamaMsg && <div className="m-ok">{sifreSifirlamaMsg}</div>}
-            {sifreSifirlamaErr && <div className="m-err">{sifreSifirlamaErr}</div>}
+            {sifreSifirlamaMsg && <div className="m-ok" style={{marginBottom:12}}>✓ {sifreSifirlamaMsg}</div>}
+            {sifreSifirlamaErr && <div className="m-err" style={{marginBottom:12}}>⚠ {sifreSifirlamaErr}</div>}
             <div className="m-acts">
-              <button className="btn-s" onClick={() => setModal(null)}>KAPAT</button>
+              <button className="btn-s" onClick={() => setModal(null)}>İptal</button>
+              <button className="btn btn-sm" onClick={sifreSifirla}>MAİL GÖNDER</button>
             </div>
           </div>
         </div>
       )}
 
+      {/* MODAL: CİHAZ SİL ONAY */}
+      {cihazSilModal && (
+        <div className="ov" onClick={() => setCihazSilModal(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div style={{textAlign:"center",marginBottom:16}}>
+              <div style={{fontSize:32,marginBottom:8}}>⚠️</div>
+              <div className="m-title" style={{color:"#dc2626"}}>CİHAZI SİL</div>
+            </div>
+            <div style={{fontSize:13,color:"#1a1a1a",marginBottom:20,lineHeight:1.8,padding:"12px",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:"4px"}}>
+              <div style={{marginBottom:8}}><strong>Bu işlem geri alınamaz!</strong></div>
+              <div style={{marginBottom:10}}>
+                <strong>{cihazSilModal.ad}</strong> cihazını silmek istediğinize emin misiniz?
+              </div>
+              {cihazSilModal.seri && <div style={{fontSize:12,color:"#666",borderTop:"1px solid #fecaca",paddingTop:8}}>
+                S/N: <strong>{cihazSilModal.seri}</strong>
+              </div>}
+              <div style={{fontSize:11,color:"#f87171",marginTop:8}}>⚠️ Bu cihaza ait tüm bakım kayıtları da silinecek!</div>
+            </div>
+            <div className="m-acts">
+              <button className="btn-s" onClick={() => setCihazSilModal(null)} style={{flex:1}}>İptal</button>
+              <button className="btn btn-sm" style={{background:"#dc2626",flex:1}} onClick={cihazSilOnayla}>EVET, SİL</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: BAKIM SİL ONAY */}
       {bakimSilModal && (
         <div className="ov" onClick={() => setBakimSilModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -1025,7 +1364,7 @@ export default function App() {
               <div style={{marginBottom:10}}>
                 <strong>{new Date(bakimSilModal.tarih).toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric" })}</strong> tarihindeki bakım kaydını silmek istediğinize emin misiniz?
               </div>
-              <div style={{fontSize:12,color:"#666",borderTop: Birden fazla referans"1px solid #fecaca",paddingTop:8}}>
+              <div style={{fontSize:12,color:"#666",borderTop:"1px solid #fecaca",paddingTop:8}}>
                 <div>👤 Teknisyen: <strong>{bakimSilModal.yapan}</strong></div>
                 {bakimSilModal.notlar && <div>📝 Not: <strong>{bakimSilModal.notlar}</strong></div>}
               </div>
@@ -1034,107 +1373,6 @@ export default function App() {
               <button className="btn-s" onClick={() => setBakimSilModal(null)} style={{flex:1}}>İptal</button>
               <button className="btn btn-sm" style={{background:"#dc2626",flex:1}} onClick={bakimSilOnayla}>EVET, SİL</button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {cihazSilModal && (
-        <div className="ov" onClick={() => setCihazSilModal(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div style={{textAlign:"center",marginBottom:16}}>
-              <div style={{fontSize:32,marginBottom:8}}>⚠️</div>
-              <div className="m-title" style={{color:"#dc2626"}}>CİHAZI SİL</div>
-            </div>
-            <div style={{fontSize:13,color:"#1a1a1a",marginBottom:20,lineHeight:1.8,padding:"12px",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:"4px"}}>
-              <div style={{marginBottom:8}}><strong>Dikkat! Cihazla birlikte tüm bakım geçmişi de silinecektir.</strong></div>
-              <div style={{marginBottom:10}}>
-                <strong>{cihazSilModal.ad}</strong> (S/N: {cihazSilModal.seri}) cihazını silmek istediğinize emin misiniz?
-              </div>
-            </div>
-            <div className="m-acts">
-              <button className="btn-s" onClick={() => setCihazSilModal(null)} style={{flex:1}}>İptal</button>
-              <button className="btn btn-sm" style={{background:"#dc2626",flex:1}} onClick={cihazSilOnayla}>CİHAZI SİL</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TEKNİK BİLGİ TAM EKRAN */}
-      {teknikBilgiEkran && (
-        <div className="tb-overlay">
-          <div className="tb-page">
-            <div className="tb-hdr">
-              <div className="tb-hdr-left">
-                <button className="home-btn" onClick={() => setTeknikBilgiEkran(false)} style={{marginRight:20}}>← GERİ DÖN</button>
-                <div className="tb-isim">TEKNİK NOTLAR VE YEDEK PARÇALAR</div>
-              </div>
-              <div style={{display:"flex", gap:10, alignItems:"center"}}>
-                <select className="tb-not-sec" value={seciliYedekNo} onChange={e => setSeciliYedekNo(e.target.value)}>
-                  <option value="">LİSTE SEÇİNİZ...</option>
-                  {yedekTablolar.map(t => <option key={t.id} value={t.id}>{t.isim}</option>)}
-                </select>
-              </div>
-            </div>
-
-            {!seciliYedekNo ? (
-              <div className="empty" style={{marginTop:100}}>
-                <div className="ico">📋</div>
-                <p>Lütfen düzenlemek veya görüntülemek istediğiniz not listesini yukarıdan seçin.</p>
-              </div>
-            ) : (
-              <div>
-                {yedekTablolar.filter(t => t.id === Number(seciliYedekNo)).map(tablo => (
-                  <div key={tablo.id}>
-                    <div style={{display:"flex", alignItems:"center", gap:12, marginBottom:20}}>
-                      {notIsmiDuzenle === tablo.id ? (
-                        <input className="tb-isim-input" autoFocus value={tablo.isim} 
-                          onChange={e => yedekTablo_isimGuncelle(tablo.id, e.target.value)}
-                          onBlur={() => setNotIsmiDuzenle(null)}
-                          onKeyDown={e => e.key === "Enter" && setNotIsmiDuzenle(null)}
-                        />
-                      ) : (
-                        <div className="tb-isim" style={{fontSize:20, color:"#e85d26"}} onClick={() => setNotIsmiDuzenle(tablo.id)}>{tablo.isim} ✎</div>
-                      )}
-                    </div>
-
-                    <div className="excel-wrap">
-                      <table className="excel-tbl">
-                        <thead>
-                          <tr>
-                            {tablo.sutunlar.map((kol, kIdx) => (
-                              <th key={kIdx} className="excel-th">
-                                <div className="excel-th-inner">
-                                  <input className="excel-th-input" value={kol} onChange={e => yedekTablo_baslikGuncelle(tablo.id, kIdx, e.target.value)} />
-                                  <button className="excel-del-col" onClick={() => yedekTablo_kolSil(tablo.id, kIdx)}>×</button>
-                                </div>
-                              </th>
-                            ))}
-                            <th className="excel-th-action">
-                              <button className="excel-add-col" onClick={() => yedekTablo_kolEkle(tablo.id)}>+</button>
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {tablo.satirlar.map((satir, sIdx) => (
-                            <tr key={satir.id} className={sIdx % 2 === 0 ? "excel-tr-even" : "excel-tr-odd"}>
-                              {satir.hücreler.map((hucre, hIdx) => (
-                                <td key={hIdx} className="excel-td">
-                                  <input className="excel-cell" value={hucre} onChange={e => yedekTablo_hucreGuncelle(tablo.id, satir.id, hIdx, e.target.value)} />
-                                </td>
-                              ))}
-                              <td className="excel-td-action">
-                                <button className="excel-del-row" onClick={() => yedekTablo_satirSil(tablo.id, satir.id)}>🗑️</button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    <button className="excel-add-row" onClick={() => yedekTablo_satirEkle(tablo.id)}>+ YENİ SATIR EKLE</button>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </div>
       )}
