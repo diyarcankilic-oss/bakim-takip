@@ -272,12 +272,11 @@ export default function App() {
   const [cihazForm, setCihazForm] = useState({ ad: CIHAZ_TURLERI[0], seri: "" });
   const [bakimForm, setBakimForm] = useState({ tarih: new Date().toISOString().split("T")[0], notlar: "", checkboxlar: [] });
 
-  // Şifre state (kullanılmıyor - Firebase Auth kullanılıyor)
   const [sifreForm, setSifreForm] = useState({});
   const [sifreErr, setSifreErr]   = useState("");
   const [sifreOk, setSifreOk]     = useState("");
 
-  // Yedek parça tabloları (5 adet, her biri satır listesi + sütun başlıkları)
+  // Yedek parça tabloları
   const DEFAULT_SUTUNLAR = ["Parça Adı", "Miktar", "Açıklama"];
   const [yedekTablolar, setYedekTablolar] = useState(
     Array.from({length:5}, (_,i) => ({
@@ -323,7 +322,6 @@ export default function App() {
     setTimeout(() => setSyncing(false), 600);
   }, []);
 
-  // Firebase realtime listener
   useEffect(() => {
     const unsubscribe = onValue(ref(db, "bakimApp"), (snap) => {
       if (snap.exists() && yuklendi) {
@@ -401,7 +399,6 @@ export default function App() {
   }, [bakimlar]);
 
   function sonPinchHatTarih(cihazId) {
-    // Bu cihaza ait bakımlardan Pinch Tube veya Hat Bakımı geçen en son tarihi bul
     const ilgiliBakimlar = bakimlar.filter(b => b.cihazId === cihazId && b.notlar && (
       b.notlar.includes("Pinch Tube Değişimi") || b.notlar.includes("Hat Bakımı")
     ));
@@ -502,7 +499,6 @@ export default function App() {
   async function cihazSilOnayla() {
     if (!cihazSilModal) return;
     const yeniCihazlar = cihazlar.filter(c => c.id !== cihazSilModal.id);
-    const silBakimlar = bakimlar.filter(b => b.cihazId === cihazSilModal.id);
     const yeniBakimlar = bakimlar.filter(b => b.cihazId !== cihazSilModal.id);
     setCihazlar(yeniCihazlar);
     setBakimlar(yeniBakimlar);
@@ -1040,17 +1036,17 @@ export default function App() {
       {modal === "kurumSilOnay" && (
         <div className="ov" onClick={() => setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <div style={{textAlign:\"center\",marginBottom:16}}>
+            <div style={{textAlign:"center",marginBottom:16}}>
               <div style={{fontSize:32,marginBottom:8}}>⚠️</div>
-              <div className="m-title" style={{color:\"#dc2626\"}}>KURUMU SİL</div>
+              <div className="m-title" style={{color:"#dc2626"}}>KURUMU SİL</div>
             </div>
-            <div style={{fontSize:13,color:\"#1a1a1a\",marginBottom:20,lineHeight:1.8,padding:\"12px\",background:\"#fef2f2\",border:\"1px solid #fecaca\",borderRadius:\"4px\"}}>
+            <div style={{fontSize:13,color:"#1a1a1a",marginBottom:20,lineHeight:1.8,padding:"12px",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:"4px"}}>
                <strong>{seciliKurum?.ad}</strong> kurumunu ve bu kuruma bağlı tüm cihaz ve bakım kayıtlarını silmek istediğinize emin misiniz?<br/>
-               <span style={{color:\"#dc2626\",fontWeight:600}}>Bu işlem geri alınamaz!</span>
+               <span style={{color:"#dc2626",fontWeight:600}}>Bu işlem geri alınamaz!</span>
             </div>
             <div className="m-acts">
               <button className="btn-s" onClick={() => setModal(null)} style={{flex:1}}>İPTAL</button>
-              <button className="btn" onClick={() => kurumSil(seciliKurumId)} style={{background:\"#dc2626\",flex:1}}>EVET, SİL</button>
+              <button className="btn" onClick={() => kurumSil(seciliKurumId)} style={{background:"#dc2626",flex:1}}>EVET, SİL</button>
             </div>
           </div>
         </div>
@@ -1059,17 +1055,17 @@ export default function App() {
       {cihazSilModal && (
         <div className="ov" onClick={() => setCihazSilModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <div style={{textAlign:\"center\",marginBottom:16}}>
+            <div style={{textAlign:"center",marginBottom:16}}>
               <div style={{fontSize:32,marginBottom:8}}>⚠️</div>
-              <div className="m-title" style={{color:\"#dc2626\"}}>CİHAZI SİL</div>
+              <div className="m-title" style={{color:"#dc2626"}}>CİHAZI SİL</div>
             </div>
-            <div style={{fontSize:13,color:\"#1a1a1a\",marginBottom:20,lineHeight:1.8,padding:\"12px\",background:\"#fef2f2\",border:\"1px solid #fecaca\",borderRadius:\"4px\"}}>
+            <div style={{fontSize:13,color:"#1a1a1a",marginBottom:20,lineHeight:1.8,padding:"12px",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:"4px"}}>
               <strong>{cihazSilModal.ad} ({cihazSilModal.seri})</strong> cihazını ve tüm bakım geçmişini silmek istediğinize emin misiniz?<br/>
-              <span style={{color:\"#dc2626\",fontWeight:600}}>Bu işlem geri alınamaz!</span>
+              <span style={{color:"#dc2626",fontWeight:600}}>Bu işlem geri alınamaz!</span>
             </div>
             <div className="m-acts">
               <button className="btn-s" onClick={() => setCihazSilModal(null)} style={{flex:1}}>İptal</button>
-              <button className="btn" onClick={cihazSilOnayla} style={{background:\"#dc2626\",flex:1}}>Cihazı Sil</button>
+              <button className="btn" onClick={cihazSilOnayla} style={{background:"#dc2626",flex:1}}>Cihazı Sil</button>
             </div>
           </div>
         </div>
