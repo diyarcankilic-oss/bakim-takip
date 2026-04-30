@@ -23,9 +23,15 @@ function fmt(t) {
   return new Date(t).toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-function Durum({ tarih, sm }) {
-  const g = gunFarki(tarih);
+function Durum({ tarih, sm, skor }) {
   const b = sm ? "bsm" : "b";
+  // skor prop verilmişse onu kullan (0=ok,1=warn,2=kritik)
+  if (skor !== undefined) {
+    if (skor === 0) return <span className={`${b} bok`}>✓ Güncel</span>;
+    if (skor === 1) return <span className={`${b} bwarn`}>⚠ Uyarı</span>;
+    return              <span className={`${b} bdanger`}>✗ Kritik</span>;
+  }
+  const g = gunFarki(tarih);
   if (g === null) return <span className={`${b} bu`}>Bakım Yok</span>;
   if (g <= 30)    return <span className={`${b} bok`}>✓ {g}g</span>;
   if (g <= 45)    return <span className={`${b} bwarn`}>⚠ {g}g</span>;
@@ -411,40 +417,66 @@ export default function App() {
     return m;
   }, [bakimlar]);
 
+  // Her cihaz için Pinch Tube ve Hat Bakımı'nı ayrı ayrı hesapla,
+  // ikisinden kötü olanın durumunu cihazın durumu say.
+  // ok=0, warn=1, kritik=2 — en yüksek değer kazanır.
+  function cihazDurumSkor(cihazId) {
+    const sonPinch = (() => {
+      const l = bakimlar.filter(b => b.cihazId === cihazId && b.notlar && b.notlar.includes("Pinch Tube Değişimi"));
+      return l.length > 0 ? l.reduce((en, b) => (!en || new Date(b.tarih) > new Date(en)) ? b.tarih : en, null) : null;
+    })();
+    const sonHat = (() => {
+      const l = bakimlar.filter(b => b.cihazId === cihazId && b.notlar && b.notlar.includes("Hat Bakımı"));
+      return l.length > 0 ? l.reduce((en, b) => (!en || new Date(b.tarih) > new Date(en)) ? b.tarih : en, null) : null;
+    })();
+    function skor(tarih) {
+      const g = gunFarki(tarih);
+      if (g === null || g > 45) return 2; // kritik
+      if (g > 30) return 1;               // uyarı
+      return 0;                           // güncel
+    }
+    // Her ikisi de hiç yapılmamışsa kritik, sadece biri yapıldıysa o birinin skoru
+    const skorP = skor(sonPinch);
+    const skorH = skor(sonHat);
+    // Eğer ikisi de null (hiç kayıt yok) → kritik
+    // Eğer biri null biri güncel → kritik (null = hiç yapılmamış)
+    return Math.max(skorP, skorH);
+  }
+
   function sonPinchHatTarih(cihazId) {
-    // Bu cihaza ait bakımlardan Pinch Tube veya Hat Bakımı geçen en son tarihi bul
-    const ilgiliBakimlar = bakimlar.filter(b => b.cihazId === cihazId && b.notlar && (
-      b.notlar.includes("Pinch Tube Değişimi") || b.notlar.includes("Hat Bakımı")
-    ));
-    if (ilgiliBakimlar.length === 0) return null;
-    return ilgiliBakimlar.reduce((en, b) => (!en || new Date(b.tarih) > new Date(en)) ? b.tarih : en, null);
+    // En eski olanın tarihini döner (kötü olanı göster)
+    const sonPinch = (() => {
+      const l = bakimlar.filter(b => b.cihazId === cihazId && b.notlar && b.notlar.includes("Pinch Tube Değişimi"));
+      return l.length > 0 ? l.reduce((en, b) => (!en || new Date(b.tarih) > new Date(en)) ? b.tarih : en, null) : null;
+    })();
+    const sonHat = (() => {
+      const l = bakimlar.filter(b => b.cihazId === cihazId && b.notlar && b.notlar.includes("Hat Bakımı"));
+      return l.length > 0 ? l.reduce((en, b) => (!en || new Date(b.tarih) > new Date(en)) ? b.tarih : en, null) : null;
+    })();
+    if (!sonPinch && !sonHat) return null;
+    if (!sonPinch) return sonHat;
+    if (!sonHat) return sonPinch;
+    // İkisi de varsa daha eskisini döndür
+    return new Date(sonPinch) < new Date(sonHat) ? sonPinch : sonHat;
   }
 
   function ist(kurumId) {
     const l = cihazlar.filter(c => c.kurumId === kurumId);
     return {
       toplam: l.length,
-      ok:     l.filter(c => { const t = sonPinchHatTarih(c.id); const g = gunFarki(t); return g !== null && g <= 30; }).length,
-      warn:   l.filter(c => { const t = sonPinchHatTarih(c.id); const g = gunFarki(t); return g !== null && g > 30 && g <= 45; }).length,
-      kritik: l.filter(c => { const t = sonPinchHatTarih(c.id); const g = gunFarki(t); return g === null || g > 45; }).length,
+      ok:     l.filter(c => cihazDurumSkor(c.id) === 0).length,
+      warn:   l.filter(c => cihazDurumSkor(c.id) === 1).length,
+      kritik: l.filter(c => cihazDurumSkor(c.id) === 2).length,
     };
   }
 
-  const genelIst = useMemo(() => {
-    function _sonPinchHat(cihazId) {
-      const ilgiliBakimlar = bakimlar.filter(b => b.cihazId === cihazId && b.notlar && (
-        b.notlar.includes("Pinch Tube Değişimi") || b.notlar.includes("Hat Bakımı")
-      ));
-      if (ilgiliBakimlar.length === 0) return null;
-      return ilgiliBakimlar.reduce((en, b) => (!en || new Date(b.tarih) > new Date(en)) ? b.tarih : en, null);
-    }
-    return {
-      toplam: cihazlar.length,
-      ok:     cihazlar.filter(c => { const t = _sonPinchHat(c.id); const g = gunFarki(t); return g !== null && g <= 30; }).length,
-      warn:   cihazlar.filter(c => { const t = _sonPinchHat(c.id); const g = gunFarki(t); return g !== null && g > 30 && g <= 45; }).length,
-      kritik: cihazlar.filter(c => { const t = _sonPinchHat(c.id); const g = gunFarki(t); return g === null || g > 45; }).length,
-    };
-  }, [cihazlar, bakimlar]);
+  const genelIst = useMemo(() => ({
+    toplam: cihazlar.length,
+    ok:     cihazlar.filter(c => cihazDurumSkor(c.id) === 0).length,
+    warn:   cihazlar.filter(c => cihazDurumSkor(c.id) === 1).length,
+    kritik: cihazlar.filter(c => cihazDurumSkor(c.id) === 2).length,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [cihazlar, bakimlar]);
 
   function goGenel()   { setEkran("kurumlar"); setSeciliKurumId(null); setSeciliCihazId(null); }
   function goKurum(id) { setSeciliKurumId(id); setEkran("kurumDetay"); setArama(""); setSeciliCihazId(null); setSeciliLine(""); }
@@ -822,14 +854,10 @@ export default function App() {
               {/* Stat filtresi aktifse cihaz listesi göster */}
               {statFiltre && (() => {
                 const filtrelenmis = cihazlar.filter(c => {
-                  const ilgili = bakimlar.filter(b => b.cihazId === c.id && b.notlar && (
-                    b.notlar.includes("Pinch Tube Değişimi") || b.notlar.includes("Hat Bakımı")
-                  ));
-                  const sonTarih = ilgili.length > 0 ? ilgili.reduce((en, b) => (!en || new Date(b.tarih) > new Date(en)) ? b.tarih : en, null) : null;
-                  const g = gunFarki(sonTarih);
-                  if (statFiltre === "ok")    return g !== null && g <= 30;
-                  if (statFiltre === "warn")  return g !== null && g > 30 && g <= 45;
-                  if (statFiltre === "kritik") return g === null || g > 45;
+                  const skor = cihazDurumSkor(c.id);
+                  if (statFiltre === "ok")     return skor === 0;
+                  if (statFiltre === "warn")   return skor === 1;
+                  if (statFiltre === "kritik") return skor === 2;
                   return false;
                 });
 
@@ -870,17 +898,15 @@ export default function App() {
                             {filtrelenmis.map(c => {
                               const sb = sonBakimlar[c.id];
                               const kurum = kurumlar.find(k=>k.id===c.kurumId);
-                              const ilgiliB = bakimlar.filter(b => b.cihazId === c.id && b.notlar && (
-                                b.notlar.includes("Pinch Tube Değişimi") || b.notlar.includes("Hat Bakımı")
-                              ));
-                              const phTarih = ilgiliB.length > 0 ? ilgiliB.reduce((en, b) => (!en || new Date(b.tarih) > new Date(en)) ? b.tarih : en, null) : null;
+                              const phTarih = sonPinchHatTarih(c.id);
+                              const phSkor = cihazDurumSkor(c.id);
                               return (
                                 <tr key={c.id} style={{cursor:"pointer"}} onClick={() => { goKurum(c.kurumId); setTimeout(()=>goCihaz(c.id),50); }}>
                                   <td style={{fontWeight:600}}>{c.ad}{c.seri && <span style={{fontWeight:400,color:"#888",fontSize:10,marginLeft:6}}>S/N: {c.seri}</span>}</td>
                                   <td><span className="ktag">{kurum?.ad}</span></td>
                                   <td style={{fontSize:11}}>{fmt(phTarih) || fmt(sb?.tarih)}</td>
-                                  <td style={{fontSize:11,fontWeight:600,color: statFiltre==="kritik"?"#dc2626":"#a16207"}}>{uyariTurleri(c.id)}</td>
-                                  <td><Durum tarih={phTarih} sm /></td>
+                                  <td style={{fontSize:11,fontWeight:600,color: phSkor===2?"#dc2626":"#a16207"}}>{uyariTurleri(c.id)}</td>
+                                  <td><Durum skor={phSkor} sm /></td>
                                 </tr>
                               );
                             })}
@@ -986,10 +1012,8 @@ export default function App() {
                     <div className="cg">
                       {kurumCihazlari.map(c => {
                         const sb = sonBakimlar[c.id];
-                        const ilgiliB = bakimlar.filter(b => b.cihazId === c.id && b.notlar && (
-                          b.notlar.includes("Pinch Tube Değişimi") || b.notlar.includes("Hat Bakımı")
-                        ));
-                        const phTarih = ilgiliB.length > 0 ? ilgiliB.reduce((en, b) => (!en || new Date(b.tarih) > new Date(en)) ? b.tarih : en, null) : null;
+                        const phSkor = cihazDurumSkor(c.id);
+                        const phTarih = sonPinchHatTarih(c.id);
                         return (
                           <div key={c.id} className="cc" onClick={() => goCihaz(c.id)}>
                             <div style={{display:"flex",justifyContent:"space-between",alignItems:"start"}}>
@@ -1001,8 +1025,8 @@ export default function App() {
                             </div>
                             <div className="cc-sb">Son Bakım</div>
                             <div className="cc-alt">
-                              <div style={{fontSize:12,fontWeight:500}}>{fmt(sb?.tarih)}</div>
-                              <Durum tarih={phTarih} sm />
+                              <div style={{fontSize:12,fontWeight:500}}>{fmt(phTarih) || fmt(sb?.tarih)}</div>
+                              <Durum skor={phSkor} sm />
                             </div>
                           </div>
                         );
