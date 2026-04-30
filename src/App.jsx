@@ -224,6 +224,8 @@ textarea.fi{min-height:70px;resize:vertical;}
 .excel-td-action{padding:4px;text-align:center;width:36px;border-bottom:1px solid #e5e7eb;background:#faf8f4;}
 .excel-del-row{background:none;border:none;cursor:pointer;font-size:13px;padding:2px;opacity:.4;transition:opacity .15s;}
 .excel-del-row:hover{opacity:1;}
+.excel-edit-row{background:none;border:none;cursor:pointer;font-size:13px;padding:2px;opacity:.4;transition:opacity .15s;color:#2563eb;}
+.excel-edit-row:hover{opacity:1;}
 .excel-add-row{display:flex;align-items:center;gap:6px;margin-top:8px;background:#1a1a1a;border:none;color:#f0ede6;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:1px;padding:9px 16px;cursor:pointer;border-radius:1px;transition:background .2s;}
 .excel-add-row:hover{background:#e85d26;}
 .col-resize{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;background:transparent;transition:background .15s;z-index:1;}
@@ -302,6 +304,7 @@ export default function App() {
   const [cihazSilModal, setCihazSilModal] = useState(null);
   const [sutunSilOnay, setSutunSilOnay] = useState(null); // {tabloId, kolIdx, sutunAd}
   const [satirSilOnay, setSatirSilOnay] = useState(null); // {tabloId, satirId}
+  const [satirDuzenle, setSatirDuzenle] = useState(null); // {tabloId, satirId, hücreler:[...]}
   const LINES = Array.from({length:8}, (_,i) => `${i+1} LINE`);
 
   // Veri yükleme - Firebase Realtime Database
@@ -530,6 +533,20 @@ export default function App() {
     );
     setYedekTablolar(yeni);
     await kaydetVeri(kurumlar, cihazlar, bakimlar, yeni);
+  }
+
+  async function yedekTablo_satirDuzenleKaydet() {
+    if (!satirDuzenle) return;
+    const yeni = yedekTablolar.map(t => t.id === satirDuzenle.tabloId
+      ? { ...t, satirlar: t.satirlar.map(s => s.id === satirDuzenle.satirId
+          ? { ...s, hücreler: [...satirDuzenle.hücreler] }
+          : s
+        )}
+      : t
+    );
+    setYedekTablolar(yeni);
+    await kaydetVeri(kurumlar, cihazlar, bakimlar, yeni);
+    setSatirDuzenle(null);
   }
 
   async function yedekTablo_satirSil(tabloId, satirId) {
@@ -815,6 +832,27 @@ export default function App() {
                   if (statFiltre === "kritik") return g === null || g > 45;
                   return false;
                 });
+
+                // Her cihaz için hangi bakımların uyarı/kritik durumda olduğunu bul
+                function uyariTurleri(cihazId) {
+                  const sinir1 = statFiltre === "warn" ? [30, 45] : [45, Infinity];
+                  const pinch = bakimlar.filter(b => b.cihazId === cihazId && b.notlar && b.notlar.includes("Pinch Tube Değişimi"));
+                  const hat   = bakimlar.filter(b => b.cihazId === cihazId && b.notlar && b.notlar.includes("Hat Bakımı"));
+                  const sonPinch = pinch.length > 0 ? pinch.reduce((en, b) => (!en || new Date(b.tarih) > new Date(en)) ? b.tarih : en, null) : null;
+                  const sonHat   = hat.length   > 0 ? hat.reduce((en, b)   => (!en || new Date(b.tarih) > new Date(en)) ? b.tarih : en, null) : null;
+                  const gP = gunFarki(sonPinch);
+                  const gH = gunFarki(sonHat);
+                  const turler = [];
+                  if (statFiltre === "kritik") {
+                    if (gP === null || gP > 45) turler.push("Pinch Tube");
+                    if (gH === null || gH > 45) turler.push("Hat Bakımı");
+                  } else {
+                    if (gP !== null && gP > sinir1[0] && gP <= sinir1[1]) turler.push("Pinch Tube");
+                    if (gH !== null && gH > sinir1[0] && gH <= sinir1[1]) turler.push("Hat Bakımı");
+                  }
+                  return turler.join(" - ") || "—";
+                }
+
                 const baslik = statFiltre==="ok" ? "Güncel Cihazlar (≤30g)" : statFiltre==="warn" ? "Uyarı Cihazlar (30-45g)" : "Kritik / Bakımsız Cihazlar";
                 return (
                   <div style={{marginBottom:20}}>
@@ -828,18 +866,23 @@ export default function App() {
                       <div className="tw">
                         <table>
                           <thead>
-                            <tr><th>Cihaz</th><th>Kurum</th><th>Son Bakım</th><th>Durum</th></tr>
+                            <tr><th>Cihaz</th><th>Kurum</th><th>Son Bakım</th><th>Bakım Türü</th><th>Durum</th></tr>
                           </thead>
                           <tbody>
                             {filtrelenmis.map(c => {
                               const sb = sonBakimlar[c.id];
                               const kurum = kurumlar.find(k=>k.id===c.kurumId);
+                              const ilgiliB = bakimlar.filter(b => b.cihazId === c.id && b.notlar && (
+                                b.notlar.includes("Pinch Tube Değişimi") || b.notlar.includes("Hat Bakımı")
+                              ));
+                              const phTarih = ilgiliB.length > 0 ? ilgiliB.reduce((en, b) => (!en || new Date(b.tarih) > new Date(en)) ? b.tarih : en, null) : null;
                               return (
                                 <tr key={c.id} style={{cursor:"pointer"}} onClick={() => { goKurum(c.kurumId); setTimeout(()=>goCihaz(c.id),50); }}>
                                   <td style={{fontWeight:600}}>{c.ad}</td>
                                   <td><span className="ktag">{kurum?.ad}</span></td>
-                                  <td style={{fontSize:11}}>{fmt(sb?.tarih)}</td>
-                                  <td><Durum tarih={sb?.tarih} sm /></td>
+                                  <td style={{fontSize:11}}>{fmt(phTarih) || fmt(sb?.tarih)}</td>
+                                  <td style={{fontSize:11,fontWeight:600,color: statFiltre==="kritik"?"#dc2626":"#a16207"}}>{uyariTurleri(c.id)}</td>
+                                  <td><Durum tarih={phTarih} sm /></td>
                                 </tr>
                               );
                             })}
@@ -1126,8 +1169,12 @@ export default function App() {
                               onChange={e => yedekTablo_hucreGuncelle(tablo.id, satir.id, ci, e.target.value)} />
                           </td>
                         ))}
-                        <td className="excel-td-action">
-                          <button className="excel-del-row" title="Satırı sil" onClick={() => setSatirSilOnay({tabloId: tablo.id, satirId: satir.id, ilkHucre: satir.hücreler[0] || ""})}>🗑</button>
+                        <td className="excel-td-action" style={{width:60}}>
+                          <div style={{display:"flex",gap:2,justifyContent:"center"}}>
+                            <button className="excel-edit-row" title="Satırı düzenle"
+                              onClick={() => setSatirDuzenle({tabloId: tablo.id, satirId: satir.id, hücreler: [...satir.hücreler]})}>✎</button>
+                            <button className="excel-del-row" title="Satırı sil" onClick={() => setSatirSilOnay({tabloId: tablo.id, satirId: satir.id, ilkHucre: satir.hücreler[0] || ""})}>🗑</button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1405,6 +1452,39 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* MODAL: SATIR DÜZENLE */}
+      {satirDuzenle && (() => {
+        const tablo = yedekTablolar.find(t => t.id === satirDuzenle.tabloId);
+        if (!tablo) return null;
+        return (
+          <div className="ov" onClick={() => setSatirDuzenle(null)}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
+              <div className="m-title">SATIRI DÜZENLE</div>
+              <div style={{fontSize:11,color:"#999",marginBottom:16,padding:"6px 10px",background:"#faf8f4",border:"1px solid #eee"}}>
+                {tablo.isim}
+              </div>
+              {tablo.sutunlar.map((sutun, ci) => (
+                <div className="fg" key={ci}>
+                  <label>{sutun}</label>
+                  <input className="fi" value={satirDuzenle.hücreler[ci] ?? ""}
+                    onChange={e => {
+                      const yeniH = [...satirDuzenle.hücreler];
+                      yeniH[ci] = e.target.value;
+                      setSatirDuzenle({...satirDuzenle, hücreler: yeniH});
+                    }}
+                    onKeyDown={e => e.key === "Enter" && yedekTablo_satirDuzenleKaydet()}
+                  />
+                </div>
+              ))}
+              <div className="m-acts">
+                <button className="btn-s" onClick={() => setSatirDuzenle(null)}>İptal</button>
+                <button className="btn btn-sm" onClick={yedekTablo_satirDuzenleKaydet}>KAYDET</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* MODAL: SÜTUN SİL ONAY */}
       {sutunSilOnay && (
