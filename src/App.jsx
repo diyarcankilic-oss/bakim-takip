@@ -205,7 +205,8 @@ textarea.fi{min-height:70px;resize:vertical;}
 /* EXCEL TABLO */
 .excel-wrap{overflow-x:auto;border:2px solid #1a1a1a;border-radius:1px;background:#fff;}
 .excel-tbl{width:100%;border-collapse:collapse;min-width:400px;}
-.excel-th{background:#1a1a1a;padding:0;border-right:1px solid #333;min-width:120px;}
+.excel-th{background:#1a1a1a;padding:0;border-right:1px solid #333;min-width:180px;position:relative;}
+.excel-th:first-child{min-width:220px;}
 .excel-th:last-of-type{border-right:none;}
 .excel-th-inner{display:flex;align-items:center;gap:4px;padding:2px 4px;}
 .excel-th-input{background:transparent;border:none;color:#f0ede6;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;padding:8px 6px;outline:none;width:100%;cursor:text;}
@@ -225,6 +226,10 @@ textarea.fi{min-height:70px;resize:vertical;}
 .excel-del-row:hover{opacity:1;}
 .excel-add-row{display:flex;align-items:center;gap:6px;margin-top:8px;background:#1a1a1a;border:none;color:#f0ede6;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:1px;padding:9px 16px;cursor:pointer;border-radius:1px;transition:background .2s;}
 .excel-add-row:hover{background:#e85d26;}
+.col-resize{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;background:transparent;transition:background .15s;z-index:1;}
+.col-resize:hover{background:rgba(232,93,38,.5);}
+.onay-modal{background:#fff;padding:24px;width:100%;max-width:400px;animation:su .2s ease;border-radius:1px;border-top:3px solid #dc2626;}
+.onay-modal .m-title{color:#dc2626;}
 .empty{text-align:center;padding:48px 20px;color:#ccc;}
 .empty .ico{font-size:36px;margin-bottom:10px;}
 .empty p{font-size:12px;}
@@ -292,8 +297,11 @@ export default function App() {
   const [notIsmiDuzenle, setNotIsmiDuzenle] = useState(null);
   const [seciliLine, setSeciliLine] = useState("");
   const [statFiltre, setStatFiltre] = useState("");
+  const [sutunGenislikleri, setSutunGenislikleri] = useState({}); // {tabloId_colIdx: width}
   const [bakimSilModal, setBakimSilModal] = useState(null);
   const [cihazSilModal, setCihazSilModal] = useState(null);
+  const [sutunSilOnay, setSutunSilOnay] = useState(null); // {tabloId, kolIdx, sutunAd}
+  const [satirSilOnay, setSatirSilOnay] = useState(null); // {tabloId, satirId}
   const LINES = Array.from({length:8}, (_,i) => `${i+1} LINE`);
 
   // Veri yükleme - Firebase Realtime Database
@@ -1073,16 +1081,37 @@ export default function App() {
                 <table className="excel-tbl">
                   <thead>
                     <tr>
-                      {tablo.sutunlar.map((s, ci) => (
-                        <th key={ci} className="excel-th">
+                      {tablo.sutunlar.map((s, ci) => {
+                        const wKey = `${tablo.id}_${ci}`;
+                        const colW = sutunGenislikleri[wKey] || (ci === 0 ? 220 : 180);
+                        return (
+                        <th key={ci} className="excel-th" style={{width:colW, minWidth:colW}}>
                           <div className="excel-th-inner">
                             <input className="excel-th-input" value={s}
                               onChange={e => yedekTablo_sutunGuncelle(tablo.id, ci, e.target.value)} />
                             {tablo.sutunlar.length > 1 &&
-                              <button className="excel-del-col" onClick={() => yedekTablo_sutunSil(tablo.id, ci)}>×</button>}
+                              <button className="excel-del-col" title="Sütunu sil" onClick={() => setSutunSilOnay({tabloId: tablo.id, kolIdx: ci, sutunAd: s})}>×</button>}
                           </div>
+                          <div className="col-resize"
+                            onMouseDown={e => {
+                              e.preventDefault();
+                              const startX = e.clientX;
+                              const startW = colW;
+                              const onMove = mv => {
+                                const newW = Math.max(80, startW + mv.clientX - startX);
+                                setSutunGenislikleri(prev => ({...prev, [wKey]: newW}));
+                              };
+                              const onUp = () => {
+                                document.removeEventListener("mousemove", onMove);
+                                document.removeEventListener("mouseup", onUp);
+                              };
+                              document.addEventListener("mousemove", onMove);
+                              document.addEventListener("mouseup", onUp);
+                            }}
+                          />
                         </th>
-                      ))}
+                        );
+                      })}
                       <th className="excel-th-action">
                         <button className="excel-add-col" onClick={() => yedekTablo_sutunEkle(tablo.id)}>+</button>
                       </th>
@@ -1098,7 +1127,7 @@ export default function App() {
                           </td>
                         ))}
                         <td className="excel-td-action">
-                          <button className="excel-del-row" onClick={() => yedekTablo_satirSil(tablo.id, satir.id)}>🗑</button>
+                          <button className="excel-del-row" title="Satırı sil" onClick={() => setSatirSilOnay({tabloId: tablo.id, satirId: satir.id, ilkHucre: satir.hücreler[0] || ""})}>🗑</button>
                         </td>
                       </tr>
                     ))}
@@ -1376,6 +1405,62 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* MODAL: SÜTUN SİL ONAY */}
+      {sutunSilOnay && (
+        <div className="ov" onClick={() => setSutunSilOnay(null)}>
+          <div className="modal onay-modal" onClick={e => e.stopPropagation()}>
+            <div style={{textAlign:"center",marginBottom:16}}>
+              <div style={{fontSize:32,marginBottom:8}}>⚠️</div>
+              <div className="m-title" style={{color:"#dc2626"}}>SÜTUNU SİL</div>
+            </div>
+            <div style={{fontSize:13,color:"#1a1a1a",marginBottom:20,lineHeight:1.8,padding:"12px",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:"4px"}}>
+              <div style={{marginBottom:8}}><strong>Bu işlem geri alınamaz!</strong></div>
+              <div>
+                <strong style={{color:"#dc2626"}}>"{sutunSilOnay.sutunAd}"</strong> başlıklı sütun silinirse değişikliği onaylıyor musunuz?
+              </div>
+              <div style={{fontSize:11,color:"#f87171",marginTop:8}}>⚠️ Bu sütundaki tüm veriler de silinecek!</div>
+            </div>
+            <div className="m-acts">
+              <button className="btn-s" onClick={() => setSutunSilOnay(null)} style={{flex:1}}>İptal</button>
+              <button className="btn btn-sm" style={{background:"#dc2626",flex:1}} onClick={() => {
+                yedekTablo_sutunSil(sutunSilOnay.tabloId, sutunSilOnay.kolIdx);
+                setSutunSilOnay(null);
+              }}>EVET, SİL</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: SATIR SİL ONAY */}
+      {satirSilOnay && (
+        <div className="ov" onClick={() => setSatirSilOnay(null)}>
+          <div className="modal onay-modal" onClick={e => e.stopPropagation()}>
+            <div style={{textAlign:"center",marginBottom:16}}>
+              <div style={{fontSize:32,marginBottom:8}}>⚠️</div>
+              <div className="m-title" style={{color:"#dc2626"}}>SATIRI SİL</div>
+            </div>
+            <div style={{fontSize:13,color:"#1a1a1a",marginBottom:20,lineHeight:1.8,padding:"12px",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:"4px"}}>
+              <div style={{marginBottom:8}}><strong>Bu işlem geri alınamaz!</strong></div>
+              <div>
+                {satirSilOnay.ilkHucre
+                  ? <><strong style={{color:"#dc2626"}}>"{satirSilOnay.ilkHucre}"</strong> satırı silinirse değişikliği onaylıyor musunuz?</>
+                  : <>Bu satır silinirse değişikliği onaylıyor musunuz?</>
+                }
+              </div>
+              <div style={{fontSize:11,color:"#f87171",marginTop:8}}>⚠️ Bu satırdaki tüm veriler silinecek!</div>
+            </div>
+            <div className="m-acts">
+              <button className="btn-s" onClick={() => setSatirSilOnay(null)} style={{flex:1}}>İptal</button>
+              <button className="btn btn-sm" style={{background:"#dc2626",flex:1}} onClick={() => {
+                yedekTablo_satirSil(satirSilOnay.tabloId, satirSilOnay.satirId);
+                setSatirSilOnay(null);
+              }}>EVET, SİL</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
