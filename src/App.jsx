@@ -835,22 +835,20 @@ export default function App() {
 
                 // Her cihaz için hangi bakımların uyarı/kritik durumda olduğunu bul
                 function uyariTurleri(cihazId) {
-                  const sinir1 = statFiltre === "warn" ? [30, 45] : [45, Infinity];
                   const pinch = bakimlar.filter(b => b.cihazId === cihazId && b.notlar && b.notlar.includes("Pinch Tube Değişimi"));
                   const hat   = bakimlar.filter(b => b.cihazId === cihazId && b.notlar && b.notlar.includes("Hat Bakımı"));
                   const sonPinch = pinch.length > 0 ? pinch.reduce((en, b) => (!en || new Date(b.tarih) > new Date(en)) ? b.tarih : en, null) : null;
                   const sonHat   = hat.length   > 0 ? hat.reduce((en, b)   => (!en || new Date(b.tarih) > new Date(en)) ? b.tarih : en, null) : null;
-                  const gP = gunFarki(sonPinch);
+                  const gP = gunFarki(sonPinch); // null = hiç yapılmamış (en kötü)
                   const gH = gunFarki(sonHat);
-                  const turler = [];
-                  if (statFiltre === "kritik") {
-                    if (gP === null || gP > 45) turler.push("Pinch Tube");
-                    if (gH === null || gH > 45) turler.push("Hat Bakımı");
-                  } else {
-                    if (gP !== null && gP > sinir1[0] && gP <= sinir1[1]) turler.push("Pinch Tube");
-                    if (gH !== null && gH > sinir1[0] && gH <= sinir1[1]) turler.push("Hat Bakımı");
-                  }
-                  return turler.join(" - ") || "—";
+
+                  // Hiç yapılmamışı en eski say (Infinity)
+                  const eskiP = gP === null ? Infinity : gP;
+                  const eskiH = gH === null ? Infinity : gH;
+
+                  // Hangisi daha eskiyse (gün sayısı büyükse) onu göster
+                  if (eskiP === eskiH) return "Pinch Tube - Hat Bakımı";
+                  return eskiP > eskiH ? "Pinch Tube" : "Hat Bakımı";
                 }
 
                 const baslik = statFiltre==="ok" ? "Güncel Cihazlar (≤30g)" : statFiltre==="warn" ? "Uyarı Cihazlar (30-45g)" : "Kritik / Bakımsız Cihazlar";
