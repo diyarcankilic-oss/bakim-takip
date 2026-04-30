@@ -892,7 +892,7 @@ export default function App() {
                       <div className="tw">
                         <table>
                           <thead>
-                            <tr><th>Cihaz</th><th>Kurum</th><th>Son Bakım</th><th>Bakım Türü</th><th>Durum</th></tr>
+                            <tr><th>Cihaz</th><th>Kurum</th><th>Son Bakım</th><th>Bakım Türü</th></tr>
                           </thead>
                           <tbody>
                             {filtrelenmis.map(c => {
@@ -905,8 +905,7 @@ export default function App() {
                                   <td style={{fontWeight:600}}>{c.ad}{c.seri && <span style={{fontWeight:400,color:"#888",fontSize:10,marginLeft:6}}>S/N: {c.seri}</span>}</td>
                                   <td><span className="ktag">{kurum?.ad}</span></td>
                                   <td style={{fontSize:11}}>{fmt(phTarih) || fmt(sb?.tarih)}</td>
-                                  <td style={{fontSize:11,fontWeight:600,color: phSkor===2?"#dc2626":"#a16207"}}>{uyariTurleri(c.id)}</td>
-                                  <td><Durum skor={phSkor} sm /></td>
+                                  <td style={{fontSize:11,fontWeight:600,color: phSkor===0?"#16a34a":phSkor===1?"#a16207":"#dc2626"}}>{uyariTurleri(c.id)}</td>
                                 </tr>
                               );
                             })}
