@@ -878,7 +878,7 @@ export default function App() {
                               const phTarih = ilgiliB.length > 0 ? ilgiliB.reduce((en, b) => (!en || new Date(b.tarih) > new Date(en)) ? b.tarih : en, null) : null;
                               return (
                                 <tr key={c.id} style={{cursor:"pointer"}} onClick={() => { goKurum(c.kurumId); setTimeout(()=>goCihaz(c.id),50); }}>
-                                  <td style={{fontWeight:600}}>{c.ad}</td>
+                                  <td style={{fontWeight:600}}>{c.ad}{c.seri && <span style={{fontWeight:400,color:"#888",fontSize:10,marginLeft:6}}>S/N: {c.seri}</span>}</td>
                                   <td><span className="ktag">{kurum?.ad}</span></td>
                                   <td style={{fontSize:11}}>{fmt(phTarih) || fmt(sb?.tarih)}</td>
                                   <td style={{fontSize:11,fontWeight:600,color: statFiltre==="kritik"?"#dc2626":"#a16207"}}>{uyariTurleri(c.id)}</td>
