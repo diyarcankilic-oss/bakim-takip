@@ -854,6 +854,8 @@ export default function App() {
               {/* Stat filtresi aktifse cihaz listesi göster */}
               {statFiltre && (() => {
                 const filtrelenmis = cihazlar.filter(c => {
+                  // Kurumu hâlâ var mı kontrolü (silinmiş kurumun cihazları görünmesin)
+                  if (!kurumlar.find(k => k.id === c.kurumId)) return false;
                   const skor = cihazDurumSkor(c.id);
                   if (statFiltre === "ok")     return skor === 0;
                   if (statFiltre === "warn")   return skor === 1;
@@ -904,9 +906,8 @@ export default function App() {
                                 <tr key={c.id} style={{cursor:"pointer"}} onClick={() => { goKurum(c.kurumId); setTimeout(()=>goCihaz(c.id),50); }}>
                                   <td>
                                     <div style={{fontWeight:700,fontSize:13}}>{c.ad}</div>
-                                    <div style={{fontSize:10,color:"#999",marginTop:2,letterSpacing:"0.5px"}}>S/N</div>
-                                    <div style={{fontSize:12,color:"#1a1a1a",fontWeight:700,letterSpacing:"0.5px"}}>
-                                      {c.seri || "—"}
+                                    <div style={{fontSize:11,color:"#888",marginTop:3,letterSpacing:"0.3px"}}>
+                                      S/N {c.seri || "—"}
                                     </div>
                                   </td>
                                   <td>
