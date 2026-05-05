@@ -903,19 +903,18 @@ export default function App() {
                               return (
                                 <tr key={c.id} style={{cursor:"pointer"}} onClick={() => { goKurum(c.kurumId); setTimeout(()=>goCihaz(c.id),50); }}>
                                   <td>
-                                    <div style={{fontWeight:600}}>{c.ad}</div>
-                                    {c.seri && (
-                                      <div style={{fontSize:10,color:"#999",marginTop:2,letterSpacing:"0.5px"}}>
-                                        {c.ad} S/N
-                                      </div>
-                                    )}
-                                    {c.seri && (
-                                      <div style={{fontSize:11,color:"#1a1a1a",fontWeight:700,letterSpacing:"0.5px"}}>
-                                        {c.seri}
-                                      </div>
+                                    <div style={{fontWeight:700,fontSize:13}}>{c.ad}</div>
+                                    <div style={{fontSize:10,color:"#999",marginTop:2,letterSpacing:"0.5px"}}>S/N</div>
+                                    <div style={{fontSize:12,color:"#1a1a1a",fontWeight:700,letterSpacing:"0.5px"}}>
+                                      {c.seri || "—"}
+                                    </div>
+                                  </td>
+                                  <td>
+                                    <span className="ktag">{kurum?.ad}</span>
+                                    {c.kurumId === 1 && c.line && (
+                                      <div style={{fontSize:10,color:"#e85d26",fontWeight:600,marginTop:4}}>{c.line}</div>
                                     )}
                                   </td>
-                                  <td><span className="ktag">{kurum?.ad}</span></td>
                                   <td style={{fontSize:11}}>{fmt(phTarih) || fmt(sb?.tarih)}</td>
                                   <td style={{fontSize:11,fontWeight:600,color: phSkor===0?"#16a34a":phSkor===1?"#a16207":"#dc2626"}}>{uyariTurleri(c.id)}</td>
                                 </tr>
